@@ -14,8 +14,25 @@ if(mode==='odds'||mode==='odds-markets'){
     const r=await fetch(u,{headers:{'X-API-Key':key,Accept:'application/json'},signal:AbortSignal.timeout(10000)});
     if(!r.ok)return res.status(r.status===404?200:r.status===401?502:r.status).json({available:false,provider:'StatsHawk',error:r.status===404?'No odds posted for this contest':r.status===429?'API quota exceeded':'Odds feed unavailable',providerStatus:r.status,data:[]});
     const p=await r.json(),data=p.data||{};
+    const bookPriority=['bet365','draftkings','fanduel'];
+    const preferredOffers=[];
+    for(const market of (Array.isArray(data.items)?data.items:[])){
+      if(market.period!=='full')continue;
+      for(const side of market.sides||[]){
+        const entries=Object.entries(side.books||{});
+        let found=null;
+        for(const wanted of bookPriority){
+          const match=entries.find(([id])=>id.toLowerCase().replace(/[^a-z0-9]/g,'').startsWith(wanted));
+          if(!match)continue;
+          const quotes=(Array.isArray(match[1])?match[1]:[]).filter(x=>Number.isFinite(Number(x.price))&&!x.withdrawn).sort((a,b)=>Date.parse(b.observed_at||0)-Date.parse(a.observed_at||0));
+          if(quotes.length){found={book:wanted==='bet365'?'bet365':wanted==='draftkings'?'DraftKings':'FanDuel',quote:quotes[0]};break}
+        }
+        if(!found)continue;
+        preferredOffers.push({market:String(market.market||''),period:market.period,measure:market.measure||null,subject:market.subject||null,outcome:side.outcome||null,book:found.book,price:found.quote.price,point:found.quote.point??null,observedAt:found.quote.observed_at||null});
+      }
+    }
     res.setHeader('Cache-Control','public,max-age=0,s-maxage=120,stale-while-revalidate=300');
-    return res.json({available:true,contest,mode,provider:'StatsHawk pregame odds',data,meta:p.meta||null,booksPreference:['bet365','draftkings','fanduel'],notice:'Pregame reference quotes only. Never label a price as a sportsbook unless that book is explicitly present.'});
+    return res.json({available:true,contest,mode,provider:'StatsHawk pregame odds',data,preferredOffers,meta:p.meta||null,booksPreference:['bet365','draftkings','fanduel'],notice:'Pregame reference quotes only. Never label a price as a sportsbook unless that book is explicitly present.'});
   }catch(e){return res.status(502).json({available:false,error:'Odds feed unreachable'})}
 }
 if(mode==='pitch-map'){
