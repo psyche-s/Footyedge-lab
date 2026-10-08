@@ -1,4 +1,4 @@
-# FootyEdge Lab
+# SportsLab
 
 Free-only research application for **NHL, NFL, MLB**. Soccer belongs to the separate original FootyEdge project.
 
