@@ -1,1 +1,3 @@
-{"version":2,"rewrites":[{"source":"/sports/soccer","destination":"/"},{"source":"/soccer","destination":"/"}]}
+{
+  "version": 2
+}
