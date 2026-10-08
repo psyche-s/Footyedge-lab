@@ -233,7 +233,7 @@ async function loadCrossGameParlay(s,date,refresh=false){
 
 const propBreakdownCache=new Map();
 function propBreakdownMarkup(p){
-  const person=String(p.personId||''),stat=String(p.market||p.stat||''),line=Number(p.line??p.point);
+  const person=String(p.personId||''),stat=String(p.stat||p.market||''),line=Number(p.line??p.point);
   if(!/^per_[a-z0-9]+$/.test(person)||!stat||!Number.isFinite(line))return'';
   return '<details class="prop-breakdown" data-person="'+esc(person)+'" data-market="'+esc(stat)+'" data-line="'+esc(line)+'" data-side="'+esc(p.side||'Over')+'" data-opponent="'+esc(p.opponent||'')+'" data-opponent-id="'+esc(p.opponentId||'')+'" data-game-id="'+esc(p.gameId||'')+'" data-date="'+esc(iso(day()))+'"><summary><span class="prop-graph-label">▥ Last 5 / 10 chart, H2H &amp; positional match-up</span><span class="prop-graph-arrow">›</span></summary><div class="prop-breakdown-body"><p class="tiny">Open to load verified game logs and opponent stats…</p></div></details>';
 }
