@@ -35,6 +35,29 @@ if(mode==='odds'||mode==='odds-markets'){
     return res.json({available:true,contest,mode,provider:'StatsHawk pregame odds',data,preferredOffers,meta:p.meta||null,booksPreference:['bet365','draftkings','fanduel'],notice:'Pregame reference quotes only. Never label a price as a sportsbook unless that book is explicitly present.'});
   }catch(e){return res.status(502).json({available:false,error:'Odds feed unreachable'})}
 }
+
+if(mode==='season-pitch-map'){
+  const pitcher=String(req.query.pitcher||''),batter=String(req.query.batter||''),season=Number(req.query.season||new Date().getUTCFullYear());
+  if(!/^per_[a-z0-9]{20,36}$/.test(pitcher)||!/^per_[a-z0-9]{20,36}$/.test(batter)||pitcher===batter||!Number.isInteger(season)||season<2020||season>new Date().getUTCFullYear())return res.status(400).json({available:false,error:'Select a pitcher, batter and valid season'});
+  try{
+    const headers={'X-API-Key':key,Accept:'application/json'},signal=AbortSignal.timeout(18000);
+    const url=id=>base+'/persons/'+id+'/game-log?competition=mlb&season='+season+'&stage=all';
+    const [pr,br]=await Promise.all([fetch(url(pitcher),{headers,signal}),fetch(url(batter),{headers,signal})]);
+    if(!pr.ok||!br.ok)return res.status(502).json({available:false,error:'Season game-log lookup unavailable'});
+    const [pp,bp]=await Promise.all([pr.json(),br.json()]);const pitchGames=pp.data?.items||[],batGames=bp.data?.items||[];
+    const names={pitcher:pitchGames.find(x=>x.line?.person_name)?.line?.person_name||null,batter:batGames.find(x=>x.line?.person_name)?.line?.person_name||null};
+    const pitSet=new Set(pitchGames.map(x=>x.game));
+    const shared=[...new Map(batGames.filter(x=>pitSet.has(x.game)&&/^cst_[a-z0-9]{20,36}$/.test(x.game)&&Date.parse(x.kickoff||0)<=Date.now()).map(x=>[x.game,x])).values()].sort((a,b)=>Date.parse(b.kickoff)-Date.parse(a.kickoff));
+    const recent=shared.slice(0,10);
+    const replies=await Promise.all(recent.map(async x=>{try{const u=new URL(base+'/contests/'+x.game+'/play-by-play');u.searchParams.set('detail','full');u.searchParams.set('pitcher_id',pitcher);u.searchParams.set('batter_id',batter);const r=await fetch(u,{headers,signal});return r.ok?{game:x.game,p:(await r.json()).data||{}}:null}catch(e){return null}}));
+    const pitches=[];let appearances=0,matchedGames=0;
+    for(const item of replies.filter(Boolean)){const pa=item.p.plate_appearances||[];if(pa.length)matchedGames++;appearances+=pa.length;
+      for(const a of pa){const hit=['single','double','triple','home_run'].includes(String(a.event_type||'').toLowerCase());for(const t of a.pitches||[]){const px=Number(t.plate_x),pz=Number(t.plate_z);pitches.push({pitcher,batter,number:t.pitch_number_game??t.pitch_number??null,type:String(t.pitch_type||'Unknown'),code:String(t.pitch_type_code||''),speed:Number.isFinite(Number(t.start_speed))?Number(t.start_speed):null,x:Number.isFinite(px)?px:null,z:Number.isFinite(pz)?pz:null,zone:Number.isInteger(t.zone)?t.zone:null,call:String(t.call_description||''),inPlay:!!t.is_in_play,whiff:/swinging strike/i.test(String(t.call_description||'')),swing:!!t.is_in_play||/swing|foul/i.test(String(t.call_description||'')),hit:!!t.is_in_play&&hit,event:String(a.event||''),inning:a.inning,half:a.half_inning,game:item.game})}}}
+    res.setHeader('Cache-Control','public,max-age=0,s-maxage=1800,stale-while-revalidate=10800');
+    return res.json({available:true,scope:'season-h2h',season,source:'StatsHawk real 2026 direct H2H Statcast',pitchCount:pitches.length,pitches:pitches.slice(0,1000),plateAppearances:appearances,sharedGames:shared.length,gamesScanned:recent.length,gamesWithPitches:matchedGames,truncated:shared.length>10,pitchers:[{id:pitcher,name:names.pitcher,count:pitches.length}],batters:[{id:batter,name:names.batter,count:pitches.length}],notice:'Direct head-to-head game logs for requested season; maximum 10 shared games inspected. When no pitch records exist, no estimate is generated.'});
+  }catch(e){return res.status(502).json({available:false,error:'Season matchup temporarily unavailable'})}
+}
+
 if(mode==='pitch-map'){
   const contest=String(req.query.contest||'');
   if(!/^cst_[a-z0-9]{20,36}$/.test(contest))return res.status(400).json({available:false,error:'Choose a valid MLB game'});
