@@ -312,7 +312,7 @@ async function scoringSlate(req,res,key,league,date){
     }
   }catch(e){warnings.push('Verified scorer market prices could not be fully retrieved; research lines are not sportsbook offers.')}
   scoring.sort((a,b)=>b.evidenceScore-a.evidenceScore||(b.last10?.games||0)-(a.last10?.games||0));
-  const groups=markets.map(m=>{
+  let groups=markets.map(m=>{
     const candidates=scoring.filter(p=>p.marketKey===m.key),unique=[],seen=new Set(),teamCount=new Map();
     for(const p of candidates){
       if(seen.has(p.personId)||(teamCount.get(p.teamId||p.team)||0)>=2)continue;
@@ -321,8 +321,13 @@ async function scoringSlate(req,res,key,league,date){
     }
     return{key:m.key,title:m.title,stat:m.stat,selection:m.selection,picks:unique};
   });
+  if(league==='nfl'){
+    const combined=[],seen=new Set();
+    for(const p of scoring){if(seen.has(p.personId))continue;seen.add(p.personId);combined.push(p);if(combined.length>=6)break}
+    groups=[{key:'touchdowns',title:'Top Touchdown Picks',stat:'receiving.td / rushing.td',selection:'Player TD (specified type)',picks:combined}];
+  }
   res.setHeader('Cache-Control','public,max-age=0,s-maxage=480,stale-while-revalidate=360');
-  return res.json({available:true,league,date,groups,scorers:groups.flatMap(x=>x.picks),warnings,modelStatus:'Scoring-event research: true historical goals, assists, touchdowns or home runs; recent form, volume opportunity and available roster/lineup flags. No calibrated win probabilities or guaranteed outcomes.',fetchedAt});
+  return res.json({available:true,league,date,groups,scorers:groups.flatMap(x=>x.picks),warnings,modelStatus:'Scoring-event research: true historical goals, assists, touchdowns or home runs; recent form, volume opportunity and available roster/lineup flags. Starting assignments and opponent advantage remain unverified unless separately evidenced. No calibrated win probabilities or guaranteed outcomes.',fetchedAt});
 }
 
 async function rankedSlate(req,res,key,league,date){
