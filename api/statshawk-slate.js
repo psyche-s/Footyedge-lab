@@ -91,8 +91,8 @@ async function playerPropDetail(req,res,key){
     }
     if(['nhl','nfl'].includes(league)&&nameResolution()&&pos&&pos!=='G'){
       try{
-        const t=await request('https://api.statshawk.ai/v1/teams/'+opponentId+'/game-log?competition='+league+'&season='+seasonStart,7000);
-        const selected=detailItems(t).filter(g=>g.status==='final'&&teamIdPattern.test(g.opponent||'')&&/^cst_[a-z0-9]{18,40}$/.test(g.game||'')&&detailDate(g)<cutoff).sort((a,b)=>detailDate(b)-detailDate(a)).slice(0,5);
+        const t=await request('https://api.statshawk.ai/v1/teams/'+opponentId+'/games?competition='+league+'&season='+seasonStart,7000);
+        const selected=detailItems(t).filter(g=>g.status==='final'&&String(g.stage||'').toLowerCase()==='regular'&&(g.home_team===opponentId||g.away_team===opponentId)&&/^cst_[a-z0-9]{18,40}$/.test(g.id||'')&&detailDate(g)<cutoff).sort((a,b)=>detailDate(b)-detailDate(a)).slice(0,5).map(g=>({...g,game:g.id,opponent:g.home_team===opponentId?g.away_team:g.home_team}));
         if(selected.length){
           const [phase,measure]=detailStats[league][stat];
           const boxData=await Promise.allSettled(selected.map(async g=>{
@@ -116,9 +116,9 @@ async function playerPropDetail(req,res,key){
           const rows=boxData.filter(x=>x.status==='fulfilled'&&x.value.hasRecordedStat).map(x=>x.value).sort((a,b)=>detailDate(a)-detailDate(b));
           if(rows.length){
             const sum=rows.reduce((acc,x)=>acc+x.total,0),playerApps=rows.reduce((acc,x)=>acc+x.players,0),hits=rows.reduce((acc,x)=>acc+x.hits,0);
-            positionAllowed={available:true,opponent:positionAllowed.opponent||opponent||null,position:pos,stat,unit:stat,season:seasonStart,games:rows.length,requestedGames:Math.min(5,selected.length),averageCombined:sum/rows.length,averagePerPlayer:playerApps?sum/playerApps:null,playerAppearances:playerApps,playerHits:hits,playerHitRate:playerApps?hits/playerApps:null,gamesWithPositionHit:rows.filter(x=>x.hits>0).length,byGame:rows,source:'StatsHawk opponent game logs, historical rosters and box scores',note:'These are totals allowed to all players at this position in each game. The per-player measure is descriptive, not a projection or calibrated probability.'};
+            positionAllowed={available:true,opponent:positionAllowed.opponent||opponent||null,position:pos,stat,unit:stat,season:seasonStart,games:rows.length,requestedGames:Math.min(5,selected.length),averageCombined:sum/rows.length,averagePerPlayer:playerApps?sum/playerApps:null,playerAppearances:playerApps,playerHits:hits,playerHitRate:playerApps?hits/playerApps:null,gamesWithPositionHit:rows.filter(x=>x.hits>0).length,byGame:rows,source:'StatsHawk opponent game logs, historical rosters and box scores',note:'Regular-season games only. Combined allowed totals and per-player figures are descriptive, not individual projections or calibrated probabilities.'};
           }else reasons.push('Recent opponent box scores did not contain confirmed position-level stats.');
-        }else reasons.push('No completed opponent games with eligible position data were found this season.');
+        }else reasons.push('No completed regular-season opponent games with eligible positional statistics were found this season.');
       }catch(e){reasons.push('Position allowed could not be verified from opponent box scores.')}
     }else if(league==='mlb'){
       reasons.push('Baseball pitcher/batter platoon and lineup context is not the same as a position-allowed defensive split.');
