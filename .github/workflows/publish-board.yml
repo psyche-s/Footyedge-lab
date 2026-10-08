@@ -1,0 +1,87 @@
+name: Publish SportsLab Picks (No Vercel Build)
+
+on:
+  workflow_dispatch:
+    inputs:
+      league:
+        description: Sport to refresh and publish
+        required: true
+        type: choice
+        options: [all, nhl, nfl, mlb]
+        default: all
+      source:
+        description: Primary then free, or public sources only
+        required: true
+        type: choice
+        options: [auto, free]
+        default: auto
+  schedule:
+    - cron: '10 11,12,17,18 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sportslab-publish-data
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check Toronto publication time
+        id: window
+        env:
+          EVENT: ${{ github.event_name }}
+        shell: bash
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          else
+            hour="$(TZ=America/Toronto date +%H)"
+            if [ "$hour" = "07" ] || [ "$hour" = "13" ]; then
+              echo "allowed=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "allowed=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+      - name: Checkout SportsLab
+        if: steps.window.outputs.allowed == 'true'
+        uses: actions/checkout@v4
+      - name: Prepare Node.js
+        if: steps.window.outputs.allowed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Collect current picks without building website
+        if: steps.window.outputs.allowed == 'true'
+        env:
+          INPUT_LEAGUE: ${{ inputs.league || 'all' }}
+          INPUT_SOURCE: ${{ inputs.source || 'auto' }}
+        run: node scripts/publish-board.js
+      - name: Publish board data in Releases without code commit
+        if: steps.window.outputs.allowed == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          shopt -s nullglob
+          files=(published/*.json)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::No verified data available to publish"
+            exit 1
+          fi
+          for file in "${files[@]}"; do
+            sport="$(basename "$file" .json)"
+            tag="sportslab-board-$sport"
+            if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
+              gh release edit "$tag" --repo "$GH_REPO" --notes-file "$file"
+              echo "Updated $sport board with no new Vercel deployment"
+            else
+              upper="$(printf '%s' "$sport" | tr '[:lower:]' '[:upper:]')"
+              gh release create "$tag" --repo "$GH_REPO" --target main --title "SportsLab data - $upper" --notes-file "$file" --latest=false
+              echo "Created first $sport board release"
+            fi
+          done
