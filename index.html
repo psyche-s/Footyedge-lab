@@ -136,6 +136,49 @@ body{background:#0d0e10}
 .cross-estimate small{grid-column:1/-1;color:#afb7c1;font-size:10px}
 @media(max-width:530px){.cross-leg{grid-template-columns:minmax(0,1fr) auto}.cross-leg-quote{max-width:116px;min-width:85px}.cross-leg-side strong{font-size:12px}.cross-preview-head h3{font-size:14px}.cross-estimate{grid-template-columns:minmax(0,1fr)}.cross-estimate strong{grid-column:1}}
 
+
+/* Click-to-expand player analysis is available on props, same-game and cross-game legs */
+.prop-breakdown{grid-column:1/-1;width:100%;border-top:1px solid rgba(185,193,205,.16);margin-top:10px;padding-top:10px;min-width:0}
+.prop-breakdown>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;color:#b4e8c4;font-size:11px;font-weight:800;cursor:pointer;list-style:none;line-height:1.5}
+.prop-breakdown>summary::-webkit-details-marker{display:none}
+.prop-graph-label{display:block;min-width:0}
+.prop-graph-arrow{font-size:19px;transform-origin:center;transition:transform .15s;color:#bdc7d0}
+.prop-breakdown[open] .prop-graph-arrow{transform:rotate(90deg)}
+.prop-breakdown-body{padding:14px 0 0;min-width:0}
+.prop-breakdown-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.prop-breakdown-top>div:first-child{display:flex;gap:6px;flex-direction:column;min-width:0}
+.prop-breakdown-top strong{font-size:12px;color:#f5f5f5;line-height:1.4}
+.prop-mini-stat{display:grid;grid-template-columns:auto auto;gap:4px 8px;align-items:center;font-size:10px;white-space:nowrap}
+.prop-mini-stat span{color:#afbac4}.prop-mini-stat b{text-align:right;color:#c1ebcf}
+.prop-chart-switch{display:flex;gap:5px;padding:4px;background:rgba(166,179,193,.10);border-radius:9px;margin:15px 0 8px;max-width:275px}
+.prop-chart-switch button{flex:1;background:transparent;color:#aeb8c3;border:0;border-radius:7px;min-height:35px;font-size:11px;font-weight:800}
+.prop-chart-switch button.active{background:#475148;color:#eef8f1}
+.prop-chart-wrap{background:rgba(10,13,16,.20);border:1px solid rgba(163,170,180,.12);border-radius:12px;width:100%;overflow-x:auto}
+.prop-chart{display:block;width:100%;min-width:360px;height:auto;max-height:310px}
+.log-bar{cursor:pointer;outline-offset:4px}
+.log-bar:focus-visible rect{stroke:#f0ddb0;stroke-width:3}
+.prop-graph-note{font-size:10px;color:#aeb6c0;padding:9px 1px;line-height:1.5}
+.prop-current-summary{font-size:11px;color:#aeb4bb;margin-top:9px}
+.prop-current-summary strong{color:#e0ebe3}
+.breakdown-section{border-top:1px solid rgba(182,188,197,.16);margin-top:17px;padding-top:14px;min-width:0}
+.breakdown-section-title{display:flex;justify-content:space-between;align-items:flex-start;gap:9px;margin-bottom:12px}
+.breakdown-section-title strong{font-size:12px;color:#e9eaea}
+.breakdown-section-title small{font-size:10px;color:#a6afbb;text-align:right;line-height:1.45}
+.breakdown-summary{font-size:11px;color:#d6e7db;margin-bottom:9px}
+.breakdown-listrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;column-gap:12px;padding:8px 0;border-bottom:1px solid rgba(170,180,190,.10);font-size:10px;color:#b7c0ca}
+.breakdown-listrow b{color:#d9e0e5;text-align:right;font-weight:700;overflow-wrap:anywhere}
+.breakdown-listrow span:last-child{text-align:right}
+.breakdown-hit{color:#a5e7b6!important}.breakdown-miss{color:#e3a4a7!important}
+.position-allowed-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:12px}
+.position-allowed-stats>div{padding:10px 8px;background:rgba(170,183,198,.10);border:1px solid rgba(178,191,205,.14);border-radius:9px;display:flex;flex-direction:column;gap:7px}
+.position-allowed-stats span{font-size:10px;color:#b6c0cc;line-height:1.4}
+.position-allowed-stats strong{font-size:16px;color:#d8efe0;white-space:nowrap}
+.position-allowed-stats small{font-size:9px;color:#a7b3bd;line-height:1.4}
+.breakdown-opponent-games summary{cursor:pointer;padding:10px 0;font-size:11px;color:#b8e4c5;font-weight:700}
+.prop-data-notes{line-height:1.6;padding-top:10px}
+.prop-loading{background:rgba(147,162,179,.1);color:#b6bdc6;border-radius:8px;padding:16px;font-size:11px;line-height:1.6}
+@media(max-width:550px){.prop-breakdown-top{gap:6px}.prop-breakdown-top strong{font-size:11px}.position-allowed-stats>div{padding:8px 6px}.position-allowed-stats strong{font-size:14px}.breakdown-section-title{flex-direction:column}.breakdown-section-title small{text-align:left}}
+
 </style></head>
 <body><header class="head"><div class="headin wrap"><div><div class="brand">Sports<em>Lab</em></div><div class="subbrand">Sports intelligence</div></div><span class="status">● &nbsp; FREE DATA</span></div></header>
 <main class="wrap"><div class="sportbar" id="sports"><button class="sport active" data-s="NHL"><span class="emoji">🏒</span>NHL</button><button class="sport" data-s="NFL"><span class="emoji">🏈</span>NFL</button><button class="sport" data-s="MLB"><span class="emoji">⚾</span>MLB</button></div>
@@ -155,14 +198,14 @@ const rankedCache=new Map();
 async function getRanked(s,d,refresh=false){const k=s+'-'+d,p=rankedCache.get(k);if(!refresh&&p&&Date.now()-p.at<240000)return p.promise;const u='/api/stat-board?view=ranked&league='+encodeURIComponent(s.toLowerCase())+'&date='+encodeURIComponent(d)+(refresh?'&refresh='+Date.now():'');const promise=fetch(u).then(async r=>{const data=await r.json();if(!r.ok||!data.available)throw Error(data.error||'Model data unavailable');return data});rankedCache.set(k,{at:Date.now(),promise});try{return await promise}catch(e){rankedCache.delete(k);throw e}}
 function statSummary(x){return x&&Number.isFinite(x.games)&&x.games>0?x.hits+'/'+x.games+' ('+Math.round(100*x.rate)+'%)':'Not available'}
 function priceTag(p){return p.priced&&Number.isFinite(p.price)?'<div class="edge-price"><b>'+esc(p.book)+' '+esc(amPrice(p.price))+'</b><small>Recorded '+esc(quoteDate(p.observedAt))+'</small></div>':'<div class="edge-price muted-price"><b>No verified price</b><small>Check bookmaker before playing</small></div>'}
-function pickMini(p){return '<div class="edge-leg"><div class="edge-legmain"><strong>'+esc(p.player)+'</strong><span>'+esc(p.selection)+'</span></div><div class="edge-legprice">'+(p.priced?'<strong>'+esc(amPrice(p.price))+'</strong><small>'+esc(p.book)+'</small>':'<small>Odds unavailable</small>')+'</div><span class="edge-legform">Observed '+esc(statSummary(p.last10))+' · avg '+esc(Number.isFinite(p.average)?Number(p.average).toFixed(1):'—')+'</span></div>'}
+function pickMini(p){return '<div class="edge-leg"><div class="edge-legmain"><strong>'+esc(p.player)+'</strong><span>'+esc(p.selection)+'</span></div><div class="edge-legprice">'+(p.priced?'<strong>'+esc(amPrice(p.price))+'</strong><small>'+esc(p.book)+'</small>':'<small>Odds unavailable</small>')+'</div><span class="edge-legform">Observed '+esc(statSummary(p.last10))+' · avg '+esc(Number.isFinite(p.average)?Number(p.average).toFixed(1):'—')+'</span>'+propBreakdownMarkup(p)+'</div>'}
 function shortOddsNote(x){return x.priced?'Exact listed quote; check freshness before placing a bet.':'Model line for research only — bet365 / DraftKings / FanDuel price not found.'}
-function makePropCard(p,i){const sample=p.last10?.games||0;return '<article class="edge-card prop-result"><div class="edge-cardtop"><div class="edge-rank">'+(i+1)+'</div><div class="edge-player"><strong>'+esc(p.player)+'</strong><span class="edge-vs">'+esc(p.game||[p.team,p.opponent].filter(Boolean).join(' vs '))+'</span></div>'+priceTag(p)+'</div><div class="edge-selection">'+esc(p.selection)+'</div><div class="edge-stats"><span><b>L5</b>'+esc(statSummary(p.last5))+'</span><span><b>L10</b>'+esc(statSummary(p.last10))+'</span><span><b>Average</b>'+esc(Number.isFinite(p.average)?Number(p.average).toFixed(1):'—')+'</span></div><details class="edge-details"><summary>Why this pick? <span>View evidence</span></summary><p>Observed hit rate for the displayed line: '+esc(statSummary(p.last10))+'. Average across recorded games: '+esc(Number.isFinite(p.average)?Number(p.average).toFixed(2):'not available')+'. '+esc(p.sampleNote||'')+'.</p><p>'+esc(shortOddsNote(p))+' Opponent-specific positional allowance, lineup and SGP correlation are not confirmed by this score.</p></details></article>'}
+function makePropCard(p,i){const sample=p.last10?.games||0;return '<article class="edge-card prop-result"><div class="edge-cardtop"><div class="edge-rank">'+(i+1)+'</div><div class="edge-player"><strong>'+esc(p.player)+'</strong><span class="edge-vs">'+esc(p.game||[p.team,p.opponent].filter(Boolean).join(' vs '))+'</span></div>'+priceTag(p)+'</div><div class="edge-selection">'+esc(p.selection)+'</div><div class="edge-stats"><span><b>L5</b>'+esc(statSummary(p.last5))+'</span><span><b>L10</b>'+esc(statSummary(p.last10))+'</span><span><b>Average</b>'+esc(Number.isFinite(p.average)?Number(p.average).toFixed(1):'—')+'</span></div><details class="edge-details"><summary>Why this pick? <span>View evidence</span></summary><p>Observed hit rate for the displayed line: '+esc(statSummary(p.last10))+'. Average across recorded games: '+esc(Number.isFinite(p.average)?Number(p.average).toFixed(2):'not available')+'. '+esc(p.sampleNote||'')+'.</p><p>'+esc(shortOddsNote(p))+' Opponent-specific positional allowance, lineup and SGP correlation are not yet included in the ranking score. Open the chart for any available opponent breakdown.</p></details>'+propBreakdownMarkup(p)+'</article>'}
 
 function crossGameSelection(p){
   const odds=p.verifiedOdds?'<strong>'+esc(p.book)+' '+esc(amPrice(p.price))+'</strong><small>'+esc(quoteDate(p.observedAt))+'</small>':Number.isFinite(p.aggregatePrice)?'<strong>Playbook '+esc(amPrice(p.aggregatePrice))+'</strong><small>Aggregate only · not a sportsbook quote</small>':'<strong>Odds unavailable</strong><small>Research threshold</small>';
   const evidence=p.last10?.games?'Historical over-line: '+statSummary(p.last10)+' · '+(Number.isFinite(p.average)?'Avg '+Number(p.average).toFixed(1):'No average'):'Market-implied share: '+(Number.isFinite(p.marketShare)?Math.round(p.marketShare*100)+'% (vig removed)':'Unavailable')+' · not a forecast';
-  return '<div class="cross-leg"><div class="cross-leg-side"><span class="cross-market">'+esc(p.marketLabel||'Market')+'</span><strong>'+esc(p.selection)+'</strong><span class="tiny">'+esc(p.gameLabel)+'</span><span class="cross-evidence">'+esc(evidence)+'</span></div><div class="cross-leg-quote">'+odds+'</div></div>';
+  return '<div class="cross-leg"><div class="cross-leg-side"><span class="cross-market">'+esc(p.marketLabel||'Market')+'</span><strong>'+esc(p.selection)+'</strong><span class="tiny">'+esc(p.gameLabel)+'</span><span class="cross-evidence">'+esc(evidence)+'</span></div><div class="cross-leg-quote">'+odds+'</div>'+(p.kind==='player'?propBreakdownMarkup(p):'')+'</div>';
 }
 function renderCrossGame(c,compact=false){
   if(!c?.available||!(c.legs||[]).length){
@@ -178,7 +221,7 @@ async function loadCrossGameParlay(s,date,refresh=false){
   try{
     const p=await getRanked(s,date,refresh);
     if(!root.isConnected||sport!==s||tab!=='cross')return;
-    root.innerHTML=renderCrossGame(p.crossGameParlay||null);
+    root.innerHTML=renderCrossGame(p.crossGameParlay||null);bindPropBreakdowns(root);
     const summary=document.getElementById('crosscoverage');
     if(summary)summary.textContent=(p.crossGameParlay?.gameCount||0)+' upcoming games evaluated · '+(p.crossGameParlay?.consideredMarkets||0)+' eligible market candidates';
   }catch(e){
@@ -187,9 +230,90 @@ async function loadCrossGameParlay(s,date,refresh=false){
   }
 }
 
+
+const propBreakdownCache=new Map();
+function propBreakdownMarkup(p){
+  const person=String(p.personId||''),stat=String(p.market||p.stat||''),line=Number(p.line??p.point);
+  if(!/^per_[a-z0-9]+$/.test(person)||!stat||!Number.isFinite(line))return'';
+  return '<details class="prop-breakdown" data-person="'+esc(person)+'" data-market="'+esc(stat)+'" data-line="'+esc(line)+'" data-side="'+esc(p.side||'Over')+'" data-opponent="'+esc(p.opponent||'')+'" data-opponent-id="'+esc(p.opponentId||'')+'" data-game-id="'+esc(p.gameId||'')+'" data-date="'+esc(iso(day()))+'"><summary><span class="prop-graph-label">▥ Last 5 / 10 chart, H2H &amp; positional match-up</span><span class="prop-graph-arrow">›</span></summary><div class="prop-breakdown-body"><p class="tiny">Open to load verified game logs and opponent stats…</p></div></details>';
+}
+function decimalStat(x){return Number.isFinite(Number(x))?Number(x).toFixed(1):'—'}
+function propBreakdownLineLabel(d){const n=Number(d.line),stat=d.stat;const name=niceMarket(stat);return (d.side==='under'?'Under ':'Over ')+n+' '+name}
+function makeGameLogChart(log,line,mode,side){
+  if(!log?.length)return'<p class="tiny">No verified game logs for this period.</p>';
+  const rows=log.slice(-10),wide=680,top=30,left=43,right=18,bottom=59,height=276,plotH=height-top-bottom,plotW=wide-left-right;
+  const mx=Math.max(1,line,...rows.map(x=>Number(x.value)||0));
+  const ceiling=Math.max(mx+0.5,Math.ceil(mx*1.2*2)/2);
+  const y=v=>top+plotH*(1-Math.max(0,v)/ceiling);
+  const baseY=y(0),thresholdY=y(line),slot=plotW/rows.length,barW=Math.max(20,Math.min(46,slot*.52));
+  const axis=[0,.25,.5,.75,1].map(frac=>{const val=ceiling*frac,py=y(val);return'<line x1="'+left+'" y1="'+py.toFixed(1)+'" x2="'+(wide-right)+'" y2="'+py.toFixed(1)+'" stroke="#5b616b" stroke-opacity=".23" stroke-dasharray="3 6"/><text x="'+(left-9)+'" y="'+(py+4).toFixed(1)+'" text-anchor="end" fill="#a2aab7" font-size="12">'+esc(Number(val.toFixed(1)))+'</text>'}).join('');
+  const bars=rows.map((r,i)=>{
+    const v=Number(r.value),x=left+i*slot+(slot-barW)/2,h=Math.max(2,baseY-y(v)),py=baseY-h,push=Math.abs(v-line)<1e-9,color=push?'#a6aebb':r.hit?'#94d9ac':'#bf7b82';
+    let when='';try{when=new Date(r.date).toLocaleDateString('en-CA',{timeZone:'America/Toronto',month:'short',day:'numeric'})}catch(e){when=String(r.date||'').slice(5,10)}
+    const opponent=String(r.opponent||'Opponent not listed'),label=(r.hit?'Cleared':push?'Equalled':'Missed')+' line',tooltip=when+' vs '+opponent+': '+v+' ('+label+')';
+    return '<g class="log-bar" data-i="'+i+'" role="button" tabindex="0" aria-label="'+esc(tooltip)+'"><rect x="'+x.toFixed(1)+'" y="'+py.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="5" fill="'+color+'" opacity=".94"/><text x="'+(x+barW/2).toFixed(1)+'" y="'+Math.max(13,py-7).toFixed(1)+'" fill="#e0e6e8" text-anchor="middle" font-size="12" font-weight="700">'+esc(v)+'</text><text x="'+(x+barW/2).toFixed(1)+'" y="'+(baseY+20)+'" text-anchor="middle" fill="#adb6c0" font-size="11">'+esc(when)+'</text><title>'+esc(tooltip)+'</title></g>';
+  }).join('');
+  return '<div class="prop-chart-wrap"><svg class="prop-chart" viewBox="0 0 '+wide+' '+height+'" role="img" aria-label="Bar chart of last '+rows.length+' recorded '+esc(mode)+' games with betting threshold '+esc(line)+' shown as a dashed horizontal line">'+axis+'<line x1="'+left+'" y1="'+thresholdY.toFixed(1)+'" x2="'+(wide-right)+'" y2="'+thresholdY.toFixed(1)+'" stroke="#edd29e" stroke-width="2.5" stroke-dasharray="9 6"/>'+bars+'<text x="'+(wide-right-3)+'" y="'+Math.max(13,thresholdY-8).toFixed(1)+'" text-anchor="end" fill="#f3d9a7" font-size="12" font-weight="800">LINE '+esc(line)+'</text></svg></div><div class="prop-graph-note" aria-live="polite">Tap a bar to see that game and opponent. Green = cleared the line; rose = missed; grey = exact line.</div>';
+}
+function renderOpponentH2H(data){
+  const h=data.headToHead||{games:[],summary:null},rows=h.games||[];
+  return '<section class="breakdown-section"><div class="breakdown-section-title"><strong>Last 5 vs this opponent</strong><small>'+esc(h.opponent||data.selectedOpponent||'Opponent unknown')+'</small></div>'+(rows.length?'<div class="breakdown-summary">'+esc(h.summary?.hits)+'/'+esc(h.summary?.games)+' cleared the line · average '+esc(decimalStat(h.summary?.average))+'</div>'+rows.slice().reverse().map(x=>'<div class="breakdown-listrow"><span>'+esc(new Date(x.date).toLocaleDateString('en-CA',{timeZone:'America/Toronto',month:'short',day:'numeric',year:'numeric'}))+'</span><b class="'+(x.hit?'breakdown-hit':'breakdown-miss')+'">'+esc(x.value)+' '+esc(niceMarket(data.stat))+'</b><span>'+esc(x.hit?'Hit':'Miss')+'</span></div>').join(''):'<p class="tiny">'+esc(h.note||'No verified head-to-head meetings available in the seasons checked.')+'</p>')+'<p class="tiny">Shows up to five actual player appearances against the selected opponent, not the last five games of that opponent’s season.</p></section>';
+}
+function renderOpponentPosition(data){
+  const a=data.positionAllowed||{},position=String(a.position||data.position||'');
+  if(!a.available)return'<section class="breakdown-section"><div class="breakdown-section-title"><strong>Opponent allowed to '+esc(position||'this position')+'</strong><small>Not verified</small></div><p class="tiny">'+esc(a.reason||'No eligible verified positional box-score data is available.')+'</p></section>';
+  const label=niceMarket(data.stat),rows=a.byGame||[],allowPct=Number.isFinite(a.playerHitRate)?Math.round(100*a.playerHitRate)+'%':'—';
+  return '<section class="breakdown-section"><div class="breakdown-section-title"><strong>'+esc(a.opponent||data.selectedOpponent||'Opponent')+' vs '+esc(position)+'</strong><small>Last '+esc(a.games)+' completed game(s)</small></div><div class="position-allowed-stats"><div><span>Position total allowed / game</span><strong>'+esc(decimalStat(a.averageCombined))+'</strong><small>'+esc(label)+'</small></div><div><span>Per recorded player</span><strong>'+esc(decimalStat(a.averagePerPlayer))+'</strong><small>'+esc(label)+'</small></div><div><span>Players who cleared '+esc(data.line)+'</span><strong>'+esc(a.playerHits)+' / '+esc(a.playerAppearances)+'</strong><small>'+esc(allowPct)+' observed</small></div></div><details class="breakdown-opponent-games"><summary>View '+esc(a.games)+' opponent game(s)</summary>'+rows.slice().reverse().map(x=>'<div class="breakdown-listrow"><span>'+esc(new Date(x.date).toLocaleDateString('en-CA',{timeZone:'America/Toronto',month:'short',day:'numeric'}))+'</span><b>'+esc(decimalStat(x.total))+' '+esc(label)+'</b><span>'+esc(x.hits)+'/'+esc(x.players)+' cleared</span></div>').join('')+'</details><p class="tiny">These are combined stats allowed to all '+esc(position)+' players in each opponent game. This is not an individual player projection.</p></section>';
+}
+function renderPropBreakdown(data,container){
+  const section=container.querySelector('.prop-breakdown-body');if(!section)return;
+  const summary5=data.last5?.summary,summary10=data.last10?.summary;
+  section.innerHTML='<div class="prop-breakdown-top"><div><span class="eyebrow">Player research</span><strong>'+esc(data.player||'Player')+' · '+esc(propBreakdownLineLabel(data))+'</strong><span class="tiny">Recorded games only · '+esc(data.scope||'In-scope seasons')+'</span></div><div class="prop-mini-stat"><span>L5</span><b>'+esc(summary5?.hits??'—')+'/'+esc(summary5?.games??'—')+'</b><span>L10</span><b>'+esc(summary10?.hits??'—')+'/'+esc(summary10?.games??'—')+'</b></div></div><div class="prop-chart-switch"><button type="button" class="active" data-games="5">Last 5</button><button type="button" data-games="10">Last 10</button></div><div class="prop-chart-target"></div>'+renderOpponentH2H(data)+renderOpponentPosition(data)+(data.notes?.length?'<p class="tiny prop-data-notes">'+data.notes.map(esc).join(' · ')+'</p>':'')+'<p class="tiny prop-data-notes">'+esc(data.notice||'Historical data is descriptive; odds and outcomes are not guaranteed.')+'</p>';
+  const target=section.querySelector('.prop-chart-target');let windowSize=5;
+  const draw=()=>{
+    const block=windowSize===5?data.last5:data.last10;
+    target.innerHTML=makeGameLogChart(block?.games||[],data.line,windowSize===5?'5':'10',data.side)+(block?.summary?.games?'<div class="prop-current-summary">Cleared line: <strong>'+esc(block.summary.hits)+' of '+esc(block.summary.games)+'</strong> · Average <strong>'+esc(decimalStat(block.summary.average))+'</strong></div>':'');
+    target.querySelectorAll('.log-bar').forEach(item=>{
+      const info=()=>{const index=Number(item.dataset.i),row=block.games[index];const note=target.querySelector('.prop-graph-note');if(row&&note)note.textContent=new Date(row.date).toLocaleDateString('en-CA',{month:'short',day:'numeric',year:'numeric',timeZone:'America/Toronto'})+' vs '+(row.opponent||'Unknown')+': '+row.value+' '+niceMarket(data.stat)+' · '+(row.hit?'Over threshold':row.value===data.line?'At threshold':'Under threshold')};
+      item.addEventListener('click',info);item.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();info()}});
+    });
+  };
+  section.querySelectorAll('[data-games]').forEach(btn=>btn.onclick=()=>{
+    windowSize=Number(btn.dataset.games);
+    section.querySelectorAll('[data-games]').forEach(b=>b.classList.toggle('active',b===btn));
+    draw();
+  });draw();
+}
+async function loadPropBreakdown(detail){
+  if(!detail?.open||detail.dataset.loaded==='yes')return;
+  const content=detail.querySelector('.prop-breakdown-body');
+  if(!content)return;
+  const person=detail.dataset.person,market=detail.dataset.market,line=detail.dataset.line,date=detail.dataset.date;
+  const params=new URLSearchParams({mode:'prop-detail',person_id:person,league:sport.toLowerCase(),stat:market,line,side:(detail.dataset.side||'Over').toLowerCase(),opponent:detail.dataset.opponent||'',date,opponent_id:detail.dataset.opponentId||'',game_id:detail.dataset.gameId||''});
+  const key=params.toString();
+  detail.dataset.loaded='loading';content.innerHTML='<div class="prop-loading">Retrieving actual player game logs, previous meetings and defensive position matchups…</div>';
+  try{
+    let promise=propBreakdownCache.get(key);
+    if(!promise){promise=fetch('/api/statshawk-slate?'+key).then(async r=>{const p=await r.json();if(!r.ok||!p.available)throw new Error(p.error||'Opponent research unavailable');return p});propBreakdownCache.set(key,promise)}
+    const data=await promise;
+    if(!detail.isConnected)return;
+    detail.dataset.loaded='yes';renderPropBreakdown(data,detail);
+  }catch(e){
+    propBreakdownCache.delete(key);if(!detail.isConnected)return;
+    content.innerHTML='<p class="tiny">This player’s verified game-log breakdown could not be retrieved: '+esc(e.message||'Source unavailable')+'.</p><button type="button" class="edge-retry">Try again</button>';
+    detail.dataset.loaded='';content.querySelector('button')?.addEventListener('click',()=>loadPropBreakdown(detail));
+  }
+}
+function bindPropBreakdowns(root){
+  if(!root)return;
+  root.querySelectorAll('details.prop-breakdown').forEach(d=>{
+    d.addEventListener('toggle',()=>{if(d.open&&d.dataset.loaded!=='yes'&&d.dataset.loaded!=='loading')loadPropBreakdown(d)});
+  });
+}
+
 function makeSGPCard(g,i){const n=g.legs?.length||0,book=g.book||'Multiple/Unavailable';return '<article class="edge-card sgp-result"><div class="edge-cardtop"><div class="edge-rank">'+(i+1)+'</div><div class="edge-player"><strong>'+esc(g.game)+'</strong><span class="edge-vs">'+esc(n)+'-leg same-game research builder</span></div><span class="edge-status">'+(g.pricedLegs===n?'Posted individual odds':'Some prices unavailable')+'</span></div><div class="edge-leglist">'+g.legs.map(p=>pickMini(p)).join('')+'</div><div class="edge-foot"><div><b>Combined SGP odds:</b> Not verified</div><small>'+esc(g.notes||'')+'</small></div><details class="edge-details"><summary>Risk check and evidence <span>Expand</span></summary><p>The legs are selected from observed player-game records and eligible game markets. They are a research combination, not a correlation-adjusted parlay forecast. No sportsbook SGP payout has been verified.</p><p>Check the confirmed lineup, goalie/starting QB, individual prices and whether the bookmaker accepts this combination.</p></details></article>'}
-async function loadRankedSGPs(s,date,refresh=false){const box=document.getElementById('sgpmarket');if(!box)return;box.innerHTML='<div class="edge-skeleton">Evaluating shot volume, player hit rates and sportsbook markets…</div>';try{const p=await getRanked(s,date,refresh);if(!box.isConnected||tab!=='sgp'||sport!==s)return;const groups=p.sgps||[];box.innerHTML=groups.length?'<div class="edge-stack">'+groups.map((g,i)=>makeSGPCard(g,i)).join('')+'</div>':'<div class="edge-card"><strong>No 3-leg combination passes the current research filter.</strong><p class="tiny">There are '+esc(p.props?.length||0)+' individually researched player markets, but not enough stable, non-duplicated legs in one game. We will not fill empty positions with weak picks.</p><button type="button" class="edge-navigate" data-go="props">View top individual props →</button></div>';if(p.warnings?.length)box.innerHTML+='<div class="edge-footnote">'+p.warnings.map(x=>'<p>'+esc(x)+'</p>').join('')+'</div>';box.querySelectorAll('[data-go="props"]').forEach(b=>b.onclick=()=>{tab='props';render()});document.getElementById('sgpcoverage').textContent=groups.length+' researched combinations · '+esc(p.props?.length||0)+' qualifying individual prop trends';const crossPreview=document.getElementById('crosspreview');if(crossPreview)crossPreview.innerHTML=renderCrossGame(p.crossGameParlay||null,true)}catch(e){box.innerHTML='<div class="edge-card">SGP analysis could not load. <button class="edge-retry">Try again</button></div>';box.querySelector('.edge-retry')?.addEventListener('click',()=>loadRankedSGPs(s,date,true))}}
-async function loadRankedProps(s,date,refresh=false){const box=document.getElementById('rankedprops');if(!box)return;box.innerHTML='<div class="edge-skeleton">Checking posted over/under lines and recent-game hit rates…</div>';try{const p=await getRanked(s,date,refresh);if(!box.isConnected||tab!=='props'||sport!==s)return;const props=p.props||[];box.innerHTML=props.length?'<div class="edge-stack">'+props.map((x,i)=>makePropCard(x,i)).join('')+'</div>':'<div class="edge-card"><strong>No qualifying props for this slate.</strong><p class="tiny">Starting roles, verified lines or recent-game samples are insufficient. Check the additional market browser below for available prices, but do not treat them as model-approved picks.</p></div>';document.getElementById('propcoverage').textContent=props.length+' of 10 evidence-ranked research candidates · '+(p.pricedProps||0)+' with listed sportsbook odds';if(p.warnings?.length)box.innerHTML+='<div class="edge-footnote">'+p.warnings.map(x=>'<p>'+esc(x)+'</p>').join('')+'</div>'}catch(e){box.innerHTML='<div class="edge-card">Player prop analysis could not load. <button class="edge-retry">Try again</button></div>';box.querySelector('.edge-retry')?.addEventListener('click',()=>loadRankedProps(s,date,true))}}
+async function loadRankedSGPs(s,date,refresh=false){const box=document.getElementById('sgpmarket');if(!box)return;box.innerHTML='<div class="edge-skeleton">Evaluating shot volume, player hit rates and sportsbook markets…</div>';try{const p=await getRanked(s,date,refresh);if(!box.isConnected||tab!=='sgp'||sport!==s)return;const groups=p.sgps||[];box.innerHTML=groups.length?'<div class="edge-stack">'+groups.map((g,i)=>makeSGPCard(g,i)).join('')+'</div>':'<div class="edge-card"><strong>No 3-leg combination passes the current research filter.</strong><p class="tiny">There are '+esc(p.props?.length||0)+' individually researched player markets, but not enough stable, non-duplicated legs in one game. We will not fill empty positions with weak picks.</p><button type="button" class="edge-navigate" data-go="props">View top individual props →</button></div>';if(p.warnings?.length)box.innerHTML+='<div class="edge-footnote">'+p.warnings.map(x=>'<p>'+esc(x)+'</p>').join('')+'</div>';box.querySelectorAll('[data-go="props"]').forEach(b=>b.onclick=()=>{tab='props';render()});document.getElementById('sgpcoverage').textContent=groups.length+' researched combinations · '+esc(p.props?.length||0)+' qualifying individual prop trends';const crossPreview=document.getElementById('crosspreview');if(crossPreview){crossPreview.innerHTML=renderCrossGame(p.crossGameParlay||null,true);bindPropBreakdowns(crossPreview)}bindPropBreakdowns(box)}catch(e){box.innerHTML='<div class="edge-card">SGP analysis could not load. <button class="edge-retry">Try again</button></div>';box.querySelector('.edge-retry')?.addEventListener('click',()=>loadRankedSGPs(s,date,true))}}
+async function loadRankedProps(s,date,refresh=false){const box=document.getElementById('rankedprops');if(!box)return;box.innerHTML='<div class="edge-skeleton">Checking posted over/under lines and recent-game hit rates…</div>';try{const p=await getRanked(s,date,refresh);if(!box.isConnected||tab!=='props'||sport!==s)return;const props=p.props||[];box.innerHTML=props.length?'<div class="edge-stack">'+props.map((x,i)=>makePropCard(x,i)).join('')+'</div>':'<div class="edge-card"><strong>No qualifying props for this slate.</strong><p class="tiny">Starting roles, verified lines or recent-game samples are insufficient. Check the additional market browser below for available prices, but do not treat them as model-approved picks.</p></div>';document.getElementById('propcoverage').textContent=props.length+' of 10 evidence-ranked research candidates · '+(p.pricedProps||0)+' with listed sportsbook odds';if(p.warnings?.length)box.innerHTML+='<div class="edge-footnote">'+p.warnings.map(x=>'<p>'+esc(x)+'</p>').join('')+'</div>';bindPropBreakdowns(box)}catch(e){box.innerHTML='<div class="edge-card">Player prop analysis could not load. <button class="edge-retry">Try again</button></div>';box.querySelector('.edge-retry')?.addEventListener('click',()=>loadRankedProps(s,date,true))}}
 async function loadGamePropSuggestions(card,s,date){const box=card.querySelector('.gameprops');if(!box)return;box.textContent='Loading available player shots and props…';try{const p=await getRanked(s,date);if(!box.isConnected)return;const h=cleanTeam(card.dataset.home),a=cleanTeam(card.dataset.away);const related=(p.candidateProps||p.props||[]).filter(x=>x.gameId===card.dataset.hawkGame||(cleanTeam(x.team)===h&&cleanTeam(x.opponent)===a)||(cleanTeam(x.team)===a&&cleanTeam(x.opponent)===h)).slice(0,5);if(related.length)box.innerHTML='<div class="panel-heading"><strong>Player prop opportunities</strong><small class="tiny">'+(s==='NHL'?'Shot volume first':'Observed game logs')+'</small></div>'+related.map(x=>'<div class="metric-pair"><span>'+esc(x.player)+' — '+esc(x.selection)+'</span><b>'+esc(statSummary(x.last10))+'</b></div>').join('')+'<p class="tiny">Past hit rates are descriptive. Go to Top 10 Props for lines, prices and complete evidence.</p>';else box.innerHTML='<strong>Player props</strong><p class="tiny">No qualifying, game-matched player prop research is available here yet. This is not a recommendation for the moneyline alone.</p>'}catch(e){box.innerHTML='<strong>Player research temporarily unavailable.</strong>'}}
 
 const researchMarkets={NHL:[['sog','Shots on goal'],['pts','Points'],['goals','Goals'],['assists','Assists'],['blocks','Blocked shots']],NFL:[['rec','Receptions'],['receiving.yards','Receiving yards'],['rushing.yards','Rushing yards'],['passing.yards','Passing yards'],['targets','Targets'],['rushing.att','Rushing attempts'],['passing.att','Passing attempts']],MLB:[['pitching.so','Pitcher Ks'],['outs','Pitcher outs'],['pitching.bb','Pitcher walks'],['pitching.h','Pitcher hits allowed'],['er','Earned runs'],['batting.h','Batter hits'],['total_bases','Total bases']]};
