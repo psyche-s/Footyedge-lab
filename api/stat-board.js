@@ -75,7 +75,7 @@ async function rankedSlate(req,res,key,league,date){
         const score=l.rate*.53+lowerBound(l.hits,l.games)*.27+Math.min(avg/(line+1.15),1)*.2;
         props.push({player:c.person.bio.display_name,personId:c.person.id,team:c.team?.name||null,opponent:c.opponent?.name||null,game:[c.team?.name,c.opponent?.name].filter(Boolean).join(' vs '),gameId:null,market:metric,marketLabel:marketName[metric],side:'Over',line,selection:playerThreshold(metric,line,'Over'),book:null,price:null,observedAt:null,last5:stat.last5,last10:stat.last10,season:stat.season,average:avg,evidenceScore:Math.round(score*100),sampleNote:l.games<5?'Small early-season sample; lineup unconfirmed':'No bookmaker offer verified; lineup unconfirmed',lineupConfirmed:false,priced:false,source:'StatsHawk historical player game logs'});
       }
-      if(!props.length)warnings.push('No player has enough logged games for qualified historical trend research.');
+      if(!props.length&&league==='nhl')warnings.push('No skater has enough logged games for a qualified shot-volume research shortlist.');
       if(league==='nhl')warnings.push('NHL shots props are research lines (2+ SOG). No bet365, DraftKings or FanDuel SOG prices were returned by the accessible odds feed.');
       if(league==='mlb')warnings.push('MLB strikeout lines are research thresholds; confirm probable starters and posted odds before playing.');
     }catch(e){warnings.push('Historical prop data unavailable: '+e.message)}
@@ -110,6 +110,7 @@ async function rankedSlate(req,res,key,league,date){
       }
     }catch(e){props.length=0;warnings.push('Starting pitcher confirmation unavailable. No MLB picks have been published without that verification.')}
   }
+  if(league==='mlb'&&!props.length)warnings.push('No verified starting-pitcher props passed the research filters today.');
   props.sort((a,b)=>b.evidenceScore-a.evidenceScore||(b.last10?.games||0)-(a.last10?.games||0));
   const picked=[],seen=new Set();for(const p of props){if(!seen.has(p.personId)){picked.push(p);seen.add(p.personId)}if(picked.length===10)break}
   const groups=new Map();
