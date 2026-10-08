@@ -21,7 +21,7 @@ async function publishedBoard(league,date,view){
   }catch(e){return null}
 }
 
-const FREE_SLATE=require('./free-slate');
+const FREE_SLATE=require('../lib/free-slate');
 
 const RANK_BASE='https://api.statshawk.ai/v1';
 const marketName={sog:'Shots on goal',rec:'Receptions','receiving.rec':'Receptions','receiving.yards':'Receiving yards','rushing.yards':'Rushing yards','passing.yards':'Passing yards','rushing.att':'Rushing attempts','passing.att':'Passing attempts',targets:'Targets','pitching.so':'Pitcher strikeouts',outs:'Pitcher outs','pitching.bb':'Pitcher walks','pitching.h':'Hits allowed','batting.h':'Batter hits',total_bases:'Total bases',er:'Earned runs'};
