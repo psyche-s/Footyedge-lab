@@ -127,11 +127,13 @@ async function buildCrossGameParlay({league,date,props,hawkKey,warnings}){
     candidates.push({game:key,gameLabel:g.awayTeamName+' @ '+g.homeTeamName,gameStart:g.startTime,market:'player_prop',marketLabel:p.marketLabel||'Player prop',selection:p.player+' — '+p.selection,side:p.side,point:p.line,price:p.priced?p.price:null,aggregatePrice:null,book:p.priced?p.book:null,verifiedOdds:!!p.priced,observedAt:p.observedAt||null,marketShare:null,evidenceScore:Math.max(1,Math.min(95,(p.evidenceScore||50)-(sample<5?7:0)-(p.priced?0:8))),last5:p.last5,last10:p.last10,average:p.average,reason:p.player+' has recorded '+p.last10.hits+'/'+sample+' over this threshold in the most recent available games. Historical rate is not a calibrated win probability.',source:p.source||'StatsHawk player logs',kind:'player'});
   }
   candidates.sort((a,b)=>b.evidenceScore-a.evidenceScore||Number(b.verifiedOdds)-Number(a.verifiedOdds));
+  const quotedGames=new Set(candidates.filter(x=>x.verifiedOdds).map(x=>x.game));
+  const maxLegs=quotedGames.size>=6?7:quotedGames.size>=4?6:quotedGames.size>=2?5:4;
   const chosen=[],seen=new Set();
   for(const p of candidates){
-    if(seen.has(p.game))continue;
+    if(seen.has(p.game)||p.evidenceScore<54)continue;
     chosen.push(p);seen.add(p.game);
-    if(chosen.length>=7)break;
+    if(chosen.length>=maxLegs)break;
   }
   // At least four distinct matchups are required, never pad with a second leg from one game.
   if(chosen.length<4)return noResult('Fewer than four distinct upcoming games have qualifying lines or research support. No cross-game parlay is forced.',{gameCount:scoped.size,consideredMarkets:candidates.length});
@@ -148,7 +150,7 @@ async function buildCrossGameParlay({league,date,props,hawkKey,warnings}){
     combinedPrice:null,estimatedPrice:arithmeticEstimate,
     verifiedBook:uniform?distinctBooks[0]:null,
     status:uniform?'Research parlay · each leg quoted by '+distinctBooks[0]+'; combined payout not verified':'Research-only combination · one or more sportsbook-specific prices unavailable',
-    explanation:'One selection per game. Moneylines, spreads, game totals, team totals (if posted), and qualifying player props are evaluated. Ranking combines listed market-implied risk and available player history. Scores are not calibrated confidence, and independent defensive/injury verification is incomplete.',
+    explanation:'One selection per game. Moneylines, spreads, game totals, team totals (if posted), and qualifying player props are evaluated. Leg count adapts to independently quoted market coverage rather than automatically using seven. Ranking combines listed market-implied risk and available player history. Scores are not calibrated confidence, and independent defensive/injury verification is incomplete.',
     notice:'No SGP-style cross-market correlation is inferred. Combined parlay odds must be verified directly at the sportsbook.'
   };
 }
