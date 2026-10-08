@@ -1,0 +1,24 @@
+name: Morning sports feed warmup
+on:
+  schedule:
+    - cron: '0 11,12 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only run at 7 AM Toronto time
+        env:
+          TZ: America/Toronto
+        run: |
+          if [ "$(date +%H)" != "07" ]; then
+            echo "Not 7 AM Toronto; skipping DST counterpart."
+            exit 0
+          fi
+          day="$(date +%F)"
+          for sport in NHL NFL MLB; do
+            curl --fail --silent --show-error --max-time 25 "https://footyedge-lab-psyche8.vercel.app/api/games?sport=${sport}&date=${day}" >/dev/null || true
+          done
+          echo "Requested scoreboard cache refresh for $day"
