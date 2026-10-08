@@ -1,0 +1,33 @@
+name: Retry SportsLab Website Deployment
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sportslab-code-deployment
+  cancel-in-progress: false
+
+jobs:
+  request-deploy:
+    name: Request a new deployment of latest main code
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout the most recent SportsLab code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+          fetch-depth: 1
+      - name: Trigger linked Vercel Git production deployment
+        shell: bash
+        run: |
+          git config user.name "sportslab-ci"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "chore: request SportsLab production code deployment (GitHub run $GITHUB_RUN_ID)"
+          git push origin HEAD:main
+          echo "Pushed the latest main code for Vercel Git integration."
+          echo "If Vercel has reached its daily limit, deployment will still be blocked."
