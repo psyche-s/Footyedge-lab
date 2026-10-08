@@ -169,7 +169,7 @@ function availabilityFromRoster(entry){
 }
 function formTrend(props){
   for(const p of props){
-    const recent=p.last5,base=p.last10,avg5=Number(p.averages?.last_5??p.avgLast5),avg10=Number(p.averages?.last_10??p.average);
+    const recent=p.last5,base=p.last10,raw5=p.averages?.last_5??p.avgLast5,raw10=p.averages?.last_10??p.average,avg5=raw5==null?NaN:Number(raw5),avg10=raw10==null?NaN:Number(raw10);
     const enough=(base?.games||0)>=7&&(recent?.games||0)>=3;
     const delta=enough?recent.rate-base.rate:null;
     const vdelta=enough&&Number.isFinite(avg5)&&Number.isFinite(avg10)?avg5-avg10:null;
@@ -178,9 +178,9 @@ function formTrend(props){
     if(delta!==null)p.evidenceScore=Math.max(1,Math.min(96,p.evidenceScore+Math.round(Math.max(-7,Math.min(7,delta*22)))));
   }
 }
-async function applyRosterAvailability(props,league,key,fetchData,warnings){
+async function applyRosterAvailability(props,league,key,fetchData,warnings,fallbackTeamIds=[]){
   if(!['nhl','nfl'].includes(league)||!props.length)return;
-  const teams=[...new Set(props.slice().sort((a,b)=>b.evidenceScore-a.evidenceScore).slice(0,26).map(x=>x.teamId).filter(x=>/^team_[a-z0-9]{18,40}$/.test(x)))].slice(0,16);
+  const teams=[...new Set([...props.slice().sort((a,b)=>b.evidenceScore-a.evidenceScore).slice(0,24).map(x=>x.teamId),...fallbackTeamIds].filter(x=>/^team_[a-z0-9]{18,40}$/.test(x)))].slice(0,16);
   if(!teams.length){warnings.push('Player starting lineups could not be verified. Trends are historical only.');return}
   const results=await Promise.allSettled(teams.map(async id=>{
     const roster=await fetchData(RANK_BASE+'/teams/'+id+'/roster',6800);
@@ -191,7 +191,7 @@ async function applyRosterAvailability(props,league,key,fetchData,warnings){
   const rosterMap=new Map(results.filter(x=>x.status==='fulfilled').map(x=>[x.value.id,x.value.record]));
   let excluded=0,flagged=0;
   for(let i=props.length-1;i>=0;i--){
-    const p=props[i],entry=rosterMap.get(p.teamId)?.get(p.personId),info=availabilityFromRoster(entry);
+    const p=props[i];if(!p.teamId){for(const [id,records] of rosterMap)if(records.has(p.personId)){p.teamId=id;break}}const entry=rosterMap.get(p.teamId)?.get(p.personId),info=availabilityFromRoster(entry);
     p.availability=info;p.lineupConfirmed=false;
     if(info.status==='out'){props.splice(i,1);excluded++;continue}
     if(info.status==='uncertain'){p.evidenceScore=Math.max(1,p.evidenceScore-11);flagged++}
@@ -210,15 +210,16 @@ const scoringMarkets={
 };
 async function scoringSlate(req,res,key,league,date){
   const markets=scoringMarkets[league]||[],warnings=[],scoring=[],fetchedAt=new Date().toISOString(),headers={'X-API-Key':key,Accept:'application/json'};
-  const fetchData=async(u,t=9000)=>{const r=await fetch(u,{headers,signal:AbortSignal.timeout(t)});if(!r.ok)throw Error('Provider HTTP '+r.status);return(await r.json()).data||{}};
+  const fetchData=async(u,t=9000)=>{const r=await fetch(u,{headers,signal:AbortSignal.timeout(t)});if(!r.ok)throw Error(r.status===429?'StatsHawk quota exhausted (429)':'Provider HTTP '+r.status);return(await r.json()).data||{}};
   const stats=await Promise.allSettled(markets.map(async market=>{
     const u=new URL(RANK_BASE+'/analysis/stat-board');
     for(const [k,v] of Object.entries({competition:league,date,stat:market.stat,line:.5,window:10,min_games:3,limit:200}))u.searchParams.set(k,v);
     return{market,data:await fetchData(u.toString(),10500)}
   }));
+  if(stats.every(x=>x.status==='rejected'&&String(x.reason||'').includes('quota'))){res.setHeader('Cache-Control','no-store');return res.status(503).json({available:false,error:'StatsHawk monthly allowance exhausted. Scoring picks paused until reset.',groups:[],scorers:[],warnings:['No old picks will be labeled current.']})}
   for(let i=0;i<stats.length;i++){
     const market=markets[i],result=stats[i];
-    if(result.status!=='fulfilled'){warnings.push(market.title+' source unavailable; no picks were fabricated.');continue}
+    if(result.status!=='fulfilled'){const err=String(result.reason||'');warnings.push(market.title+(err.includes('quota')?' paused: monthly StatsHawk allowance exhausted.':' source unavailable; no picks were fabricated.'));continue}
     const data=result.value.data,rows=(Array.isArray(data.full_slate)?data.full_slate:[]).filter(x=>/^per_[a-z0-9]{18,40}$/.test(x.person?.id||'')&&x.person?.bio?.display_name&&x.games_in_window>=3&&Number.isFinite(Number(x.window_rate)));
     const ordered=rows.sort((a,b)=>{
       const as=a.window_rate*(a.games_in_window/(a.games_in_window+5)),bs=b.window_rate*(b.games_in_window/(b.games_in_window+5));
@@ -228,7 +229,7 @@ async function scoringSlate(req,res,key,league,date){
     for(const row of ordered){
       const tid=row.team?.team_id||row.team?.id||row.team?.name||'Unknown',count=byTeam.get(tid)||0;
       if(count>=2)continue;
-      selected.push(row);byTeam.set(tid,count+1);if(selected.length>=16)break;
+      selected.push(row);byTeam.set(tid,count+1);if(selected.length>=10)break;
     }
     const checked=await Promise.allSettled(selected.map(async(row)=>{
       const u=new URL(RANK_BASE+'/analysis/player-prop');for(const[k,v]of Object.entries({person_id:row.person.id,competition:league,stat:market.stat,line:market.line}))u.searchParams.set(k,v);
@@ -267,7 +268,7 @@ async function scoringSlate(req,res,key,league,date){
   }
   // Check that a goalscorer / TD / HR candidate still receives opportunities (shots, targets, carries, PA).
   // A role floor can reject a high event-rate sample with no repeatable current volume.
-  const top=scoring.slice().sort((a,b)=>b.evidenceScore-a.evidenceScore).slice(0,20);
+  const top=scoring.slice().sort((a,b)=>b.evidenceScore-a.evidenceScore).slice(0,12);
   const roles=await Promise.allSettled(top.map(async p=>{
     const market=markets.find(x=>x.key===p.marketKey),stat=market.role;
     const u=new URL(RANK_BASE+'/analysis/player-prop');for(const[k,v]of Object.entries({person_id:p.personId,competition:league,stat,line:.5}))u.searchParams.set(k,v);
@@ -327,13 +328,13 @@ async function scoringSlate(req,res,key,league,date){
 async function rankedSlate(req,res,key,league,date){
   const headers={'X-API-Key':key,Accept:'application/json'};
   const warnings=[];
-  const fetchData=async(url,timeout=8000)=>{const r=await fetch(url,{headers,signal:AbortSignal.timeout(timeout)});if(!r.ok)throw Error('Provider HTTP '+r.status);const p=await r.json();return p.data||{}};
-  const props=[],matched=[];
+  const fetchData=async(url,timeout=8000)=>{const r=await fetch(url,{headers,signal:AbortSignal.timeout(timeout)});if(!r.ok)throw Error(r.status===429?'StatsHawk quota exhausted (429)':'Provider HTTP '+r.status);const p=await r.json();return p.data||{}};
+  const props=[],matched=[],nflTeamIds=[];
   if(league==='nfl'){
     try{
       const season=Number(date.slice(0,4))-(Number(date.slice(5,7))<3?1:0);
       const slate=await fetchData(RANK_BASE+'/competitions/nfl/editions/'+season+'/games?date='+encodeURIComponent(date));
-      const games=(slate.items||[]).filter(x=>etDate(x.kickoff)===date&&!['postponed','cancelled','final'].includes(x.status)).slice(0,6);
+      const games=(slate.items||[]).filter(x=>etDate(x.kickoff)===date&&!['postponed','cancelled','final'].includes(x.status)).slice(0,6);for(const g of games){if(g.home_team)nflTeamIds.push(g.home_team);if(g.away_team)nflTeamIds.push(g.away_team)}
       const quoteResults=await Promise.allSettled(games.map(async game=>({game,odds:await fetchData(RANK_BASE+'/contests/'+game.id+'/odds',9000)})));
       const quotes=[];
       for(const result of quoteResults){
@@ -361,7 +362,7 @@ async function rankedSlate(req,res,key,league,date){
       }
       const best=new Map();
       for(const q of quotes){const id=q.person.id+'|'+q.measure+'|'+q.line;const old=best.get(id);if(!old||bookOrder.indexOf(q.book)<bookOrder.indexOf(old.book)||old.side==='Under'&&q.side==='Over')best.set(id,q)}
-      const work=[...best.values()].slice(0,28);
+      const work=[...best.values()].slice(0,20);
       const stats=await Promise.allSettled(work.map(async q=>{const u=new URL(RANK_BASE+'/analysis/player-prop');for(const[k,v]of Object.entries({person_id:q.person.id,competition:'nfl',stat:q.measure,line:q.line}))u.searchParams.set(k,v);const result=await fetchData(u.toString(),7500);return{quote:q,data:result}}));
       for(const result of stats){
         if(result.status!=='fulfilled')continue;
@@ -382,7 +383,7 @@ async function rankedSlate(req,res,key,league,date){
       for(const row of raw){const key=row.team?.name||'Unknown';if(!grouped.has(key))grouped.set(key,[]);grouped.get(key).push(row)}
       const selected=[];for(const group of grouped.values())selected.push(...group.slice(0,league==='nhl'?3:4));
       selected.sort((a,b)=>(b.games_in_window||0)-(a.games_in_window||0));
-      const candidates=selected.slice(0,league==='nhl'?56:22);
+      const candidates=selected.slice(0,league==='nhl'?32:18);
       const results=await Promise.allSettled(candidates.map(async c=>{const p=new URL(RANK_BASE+'/analysis/player-prop');for(const[k,v]of Object.entries({person_id:c.person.id,competition:league,stat:metric,line}))p.searchParams.set(k,v);return{candidate:c,card:await fetchData(p.toString(),8000)}}));
       for(const result of results){
         if(result.status!=='fulfilled')continue;
@@ -429,7 +430,7 @@ async function rankedSlate(req,res,key,league,date){
   }
   if(league==='mlb'&&!props.length)warnings.push('No verified starting-pitcher props passed the research filters today.');
   formTrend(props);
-  await applyRosterAvailability(props,league,key,fetchData,warnings);
+  await applyRosterAvailability(props,league,key,fetchData,warnings,nflTeamIds);
   props.sort((a,b)=>b.evidenceScore-a.evidenceScore||(b.last10?.games||0)-(a.last10?.games||0));
   const picked=[],seen=new Set();for(const p of props){if(!seen.has(p.personId)){picked.push(p);seen.add(p.personId)}if(picked.length===10)break}
   const groups=new Map();
