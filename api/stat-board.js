@@ -80,7 +80,36 @@ async function rankedSlate(req,res,key,league,date){
       if(league==='mlb')warnings.push('MLB strikeout lines are research thresholds; confirm probable starters and posted odds before playing.');
     }catch(e){warnings.push('Historical prop data unavailable: '+e.message)}
   }
-  if(league==='mlb'&&props.length){try{const r=await fetch('https://statsapi.mlb.com/api/v1/schedule?sportId=1&date='+date+'&hydrate=probablePitcher',{signal:AbortSignal.timeout(6000)});if(r.ok){const p=await r.json();const names=new Set();for(const d of p.dates||[])for(const g of d.games||[])for(const k of ['home','away']){const name=g.teams?.[k]?.probablePitcher?.fullName;if(name)names.add(marketKey(name))}if(names.size){for(let i=props.length-1;i>=0;i--)if(!names.has(marketKey(props[i].player)))props.splice(i,1);warnings.push('Only officially listed probable starters qualify; batting order and sportsbook prices must still be verified.')}else warnings.push('Official probable starters unavailable, so pitcher props are not game-qualified.')}else warnings.push('MLB starting pitcher verification unavailable.')}catch(e){warnings.push('Unable to verify probable starters from MLB official schedule.')}}
+  if(league==='mlb'){
+    try{
+      const r=await fetch('https://statsapi.mlb.com/api/v1/schedule?sportId=1&date='+date+'&hydrate=probablePitcher',{signal:AbortSignal.timeout(6500)});
+      const probable=[];
+      if(r.ok){const d=await r.json();for(const row of d.dates||[])for(const g of row.games||[])for(const side of ['home','away']){
+        const a=g.teams?.[side],other=g.teams?.[side==='home'?'away':'home'];if(a?.probablePitcher?.fullName)probable.push({name:a.probablePitcher.fullName,team:a.team?.name||'',opponent:other?.team?.name||''});
+      }}
+      if(probable.length){
+        const valid=new Set(probable.map(x=>marketKey(x.name)));
+        for(let i=props.length-1;i>=0;i--)if(!valid.has(marketKey(props[i].player)))props.splice(i,1);
+        const known=new Set(props.map(x=>marketKey(x.player)));
+        const absent=probable.filter(x=>!known.has(marketKey(x.name)));
+        const extra=await Promise.allSettled(absent.map(async person=>{
+          const found=await fetchData(RANK_BASE+'/persons?q='+encodeURIComponent(person.name)+'&limit=10',6500);
+          const a=(found.items||[]).find(x=>marketKey(x.bio?.display_name||x.bio?.full_name)===marketKey(person.name));if(!a)return null;
+          const u=new URL(RANK_BASE+'/analysis/player-prop');for(const[k,v]of Object.entries({person_id:a.id,competition:'mlb',stat:'pitching.so',line:4.5}))u.searchParams.set(k,v);
+          const c=await fetchData(u.toString(),6500);
+          return{person,card:c,id:a.id};
+        }));
+        for(const e of extra){if(e.status!=='fulfilled'||!e.value)continue;const {person,card,id}=e.value,rate=numericHitRates(card,'Over',4.5),l=rate.last10||rate.season;const average=Number(card.averages?.last_10??card.averages?.season);if(!l||l.games<3||!Number.isFinite(average)||average<3.5)continue;
+          const score=l.rate*.53+lowerBound(l.hits,l.games)*.27+Math.min(average/5.65,1)*.20;
+          props.push({player:person.name,personId:id,team:person.team,opponent:person.opponent,game:[person.team,person.opponent].filter(Boolean).join(' vs '),gameId:null,market:'pitching.so',marketLabel:'Pitcher strikeouts',side:'Over',line:4.5,selection:'Over 4.5 Pitcher strikeouts',book:null,price:null,observedAt:null,last5:rate.last5,last10:rate.last10,season:rate.season,average,evidenceScore:Math.round(score*100),sampleNote:'Officially listed probable starter; game lineup and price not confirmed',lineupConfirmed:false,priced:false,source:'MLB official probable starters + StatsHawk historical game logs'});
+        }
+        warnings.push('MLB prop candidates are limited to pitchers listed as probable starters by MLB. Bookmaker-specific prices were not available.');
+      }else{
+        for(let i=props.length-1;i>=0;i--)if(props[i].last10?.rate<.6||props[i].average<4.5)props.splice(i,1);
+        warnings.push('Official probable starters are not posted for this date. Remaining historical pitcher stats are watchlist-only, not qualified game picks.');
+      }
+    }catch(e){props.length=0;warnings.push('Starting pitcher confirmation unavailable. No MLB picks have been published without that verification.')}
+  }
   props.sort((a,b)=>b.evidenceScore-a.evidenceScore||(b.last10?.games||0)-(a.last10?.games||0));
   const picked=[],seen=new Set();for(const p of props){if(!seen.has(p.personId)){picked.push(p);seen.add(p.personId)}if(picked.length===10)break}
   const groups=new Map();
