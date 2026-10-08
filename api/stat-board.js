@@ -50,7 +50,7 @@ async function rankedSlate(req,res,key,league,date){
         if(result.status!=='fulfilled')continue;
         const {quote:q,data:p}=result.value,stats=numericHitRates(p,q.side,q.line),l=stats.last10||stats.season;
         if(!l||l.games<3)continue;
-        const a=p.averages||{};
+        const a=p.averages||{};const recentAvg=Number(a.last_10??a.season);if(!Number.isFinite(recentAvg)||(q.side==='Over'&&recentAvg<=q.line)||(q.side==='Under'&&recentAvg>=q.line))continue;
         const score=l.rate*.57+lowerBound(l.hits,l.games)*.31+Math.min(l.games,10)/10*.12;
         props.push({player:q.person.name||p.person?.bio?.display_name||'Unknown',personId:q.person.id,team:p.team?.name||null,opponent:p.opponent?.name||null,game:q.game.away_team_name+' @ '+q.game.home_team_name,gameId:q.game.id,market:q.measure,marketLabel:marketName[q.measure]||q.measure,side:q.side,line:q.line,selection:playerThreshold(q.measure,q.line,q.side),book:q.book==='fanduel'?'FanDuel':q.book==='draftkings'?'DraftKings':'bet365',price:q.price,observedAt:q.observedAt,last5:stats.last5,last10:stats.last10,season:stats.season,average:a.last_10??a.season??null,evidenceScore:Math.round(score*100),sampleNote:l.games<5?'Small sample — early season':'Historical sample; not a prediction',lineupConfirmed:false,priced:true,source:'StatsHawk sportsbook odds + player game logs'});
       }
@@ -63,15 +63,15 @@ async function rankedSlate(req,res,key,league,date){
       const data=await fetchData(u.toString(),11000),raw=(data.full_slate||[]).filter(x=>x.person?.id&&x.person?.bio?.display_name&&x.games_in_window>=3);
       const grouped=new Map();
       for(const row of raw){const key=row.team?.name||'Unknown';if(!grouped.has(key))grouped.set(key,[]);grouped.get(key).push(row)}
-      const selected=[];for(const group of grouped.values())selected.push(...group.slice(0,league==='nhl'?2:4));
+      const selected=[];for(const group of grouped.values())selected.push(...group.slice(0,league==='nhl'?3:4));
       selected.sort((a,b)=>(b.games_in_window||0)-(a.games_in_window||0));
-      const candidates=selected.slice(0,league==='nhl'?38:22);
+      const candidates=selected.slice(0,league==='nhl'?56:22);
       const results=await Promise.allSettled(candidates.map(async c=>{const p=new URL(RANK_BASE+'/analysis/player-prop');for(const[k,v]of Object.entries({person_id:c.person.id,competition:league,stat:metric,line}))p.searchParams.set(k,v);return{candidate:c,card:await fetchData(p.toString(),8000)}}));
       for(const result of results){
         if(result.status!=='fulfilled')continue;
         const {candidate:c,card}=result.value,stat=numericHitRates(card,'Over',line),l=stat.last10||stat.season;
         if(!l||l.games<3)continue;
-        const avg=Number(card.averages?.last_10??card.averages?.season)||0;
+        const avg=Number(card.averages?.last_10??card.averages?.season)||0;if(league==='nhl'&&(l.rate<.5||avg<1.5))continue;if(league==='mlb'&&(l.rate<.5||avg<4.2))continue;
         const score=l.rate*.53+lowerBound(l.hits,l.games)*.27+Math.min(avg/(line+1.15),1)*.2;
         props.push({player:c.person.bio.display_name,personId:c.person.id,team:c.team?.name||null,opponent:c.opponent?.name||null,game:[c.team?.name,c.opponent?.name].filter(Boolean).join(' vs '),gameId:null,market:metric,marketLabel:marketName[metric],side:'Over',line,selection:playerThreshold(metric,line,'Over'),book:null,price:null,observedAt:null,last5:stat.last5,last10:stat.last10,season:stat.season,average:avg,evidenceScore:Math.round(score*100),sampleNote:l.games<5?'Small early-season sample; lineup unconfirmed':'No bookmaker offer verified; lineup unconfirmed',lineupConfirmed:false,priced:false,source:'StatsHawk historical player game logs'});
       }
@@ -80,12 +80,13 @@ async function rankedSlate(req,res,key,league,date){
       if(league==='mlb')warnings.push('MLB strikeout lines are research thresholds; confirm probable starters and posted odds before playing.');
     }catch(e){warnings.push('Historical prop data unavailable: '+e.message)}
   }
+  if(league==='mlb'&&props.length){try{const r=await fetch('https://statsapi.mlb.com/api/v1/schedule?sportId=1&date='+date+'&hydrate=probablePitcher',{signal:AbortSignal.timeout(6000)});if(r.ok){const p=await r.json();const names=new Set();for(const d of p.dates||[])for(const g of d.games||[])for(const k of ['home','away']){const name=g.teams?.[k]?.probablePitcher?.fullName;if(name)names.add(marketKey(name))}if(names.size){for(let i=props.length-1;i>=0;i--)if(!names.has(marketKey(props[i].player)))props.splice(i,1);warnings.push('Only officially listed probable starters qualify; batting order and sportsbook prices must still be verified.')}else warnings.push('Official probable starters unavailable, so pitcher props are not game-qualified.')}else warnings.push('MLB starting pitcher verification unavailable.')}catch(e){warnings.push('Unable to verify probable starters from MLB official schedule.')}}
   props.sort((a,b)=>b.evidenceScore-a.evidenceScore||(b.last10?.games||0)-(a.last10?.games||0));
   const picked=[],seen=new Set();for(const p of props){if(!seen.has(p.personId)){picked.push(p);seen.add(p.personId)}if(picked.length===10)break}
   const groups=new Map();
   for(const p of props){const game=p.gameId||[p.team,p.opponent].filter(Boolean).sort().join('|');if(!game)continue;if(!groups.has(game))groups.set(game,[]);groups.get(game).push(p)}
   const sgps=[];
-  for(const [gid,entries] of groups){const sorted=entries.filter(x=>x.last10&&x.last10.games>=3&&x.last10.rate>=.5).sort((a,b)=>b.evidenceScore-a.evidenceScore);const unique=[],ids=new Set();for(const p of sorted){if(ids.has(p.personId))continue;ids.add(p.personId);unique.push(p);if(unique.length>=5)break}if(unique.length<3)continue;const legs=unique.slice(0,Math.min(5,unique.length));sgps.push({game:legs[0].game,gameId:legs[0].gameId||null,legs,legCount:legs.length,combinedPrice:null,book:legs.every(x=>x.book===legs[0].book)?legs[0].book:null,pricedLegs:legs.filter(x=>x.priced).length,rankScore:Math.round(legs.reduce((a,b)=>a+b.evidenceScore,0)/legs.length),status:'Research combination — SGP-specific combined odds and correlation not verified',notes:legs.some(x=>x.last10.games<5)?'Early-season data: do not interpret observed rates as future success probability.':'Correlation, lineup availability and combined payout still require bookmaker confirmation.'})}
+  for(const [gid,entries] of groups){const sorted=entries.filter(x=>x.last10&&x.last10.games>=3&&x.last10.rate>=.65).sort((a,b)=>b.evidenceScore-a.evidenceScore);const unique=[],ids=new Set();for(const p of sorted){if(ids.has(p.personId))continue;ids.add(p.personId);unique.push(p);if(unique.length>=5)break}if(unique.length<3)continue;const legs=unique.slice(0,Math.min(5,unique.length));sgps.push({game:legs[0].game,gameId:legs[0].gameId||null,legs,legCount:legs.length,combinedPrice:null,book:legs.every(x=>x.book===legs[0].book)?legs[0].book:null,pricedLegs:legs.filter(x=>x.priced).length,rankScore:Math.round(legs.reduce((a,b)=>a+b.evidenceScore,0)/legs.length),status:'Research combination — SGP-specific combined odds and correlation not verified',notes:legs.some(x=>x.last10.games<5)?'Early-season data: do not interpret observed rates as future success probability.':'Correlation, lineup availability and combined payout still require bookmaker confirmation.'})}
   sgps.sort((a,b)=>b.rankScore-a.rankScore);
   res.setHeader('Cache-Control','public,max-age=0,s-maxage=360,stale-while-revalidate=300');
   return res.status(200).json({available:true,league,date,props:picked,sgps:sgps.slice(0,3),candidatesEvaluated:props.length,pricedProps:picked.filter(x=>x.priced).length,warnings,modelStatus:'Historical research and exact posted bookmaker lines where available; not calibrated betting probabilities. Never infer a combined SGP payout.',sources:['StatsHawk statistical logs','StatsHawk sportsbook pregame quotes when posted']});
