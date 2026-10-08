@@ -7,6 +7,152 @@ const etDate=d=>{try{const date=new Date(d);if(!Number.isFinite(date.valueOf()))
 function playerThreshold(metric,line,dir){const inclusive=dir==='Over'&&Number.isInteger(line+0.5);if(metric==='sog'&&line===1.5&&dir==='Over')return'2+ shots on goal';return dir+' '+line+' '+(marketName[metric]||metric)}
 function lowerBound(h,n){if(!n)return 0;const p=h/n,z=1.64;return Math.max(0,(p+z*z/(2*n)-z*Math.sqrt(p*(1-p)/n+z*z/(4*n*n)))/(1+z*z/n))}
 function numericHitRates(card,side,threshold){const w=card?.hit_rates||{};const norm=x=>{const n=Number(x?.games),o=Number(x?.hits);if(!Number.isFinite(n)||n<1||!Number.isFinite(o))return null;const pushes=(Number.isInteger(threshold)?null:0);if(side==='Under'&&pushes===null)return null;const hits=side==='Under'?n-o:o;return{games:n,hits,rate:hits/n,average:null}};return{last5:norm(w.last_5),last10:norm(w.last_10),season:norm(w.season)}}
+
+function impliedMarket(odds){const n=Number(odds);return !Number.isFinite(n)||n===0?null:n>0?100/(n+100):-n/(-n+100)}
+function marketScore(a,b){const x=impliedMarket(a),y=impliedMarket(b);return x===null||y===null?null:x/(x+y)}
+function americanAllowed(n){return Number.isFinite(n)&&n>=-400&&n!==0&&n>=-10000&&n<=10000}
+function pickBookName(raw){const name=marketKey(raw);return name==='bet365'?'bet365':name==='draftkings'?'DraftKings':name==='fanduel'?'FanDuel':null}
+function findBookQuote(side,baseLine){
+  if(!side?.books)return null;
+  for(const wanted of bookOrder){
+    const key=Object.keys(side.books).find(k=>marketKey(k)===wanted),quotes=key?side.books[key]:null;
+    if(!Array.isArray(quotes))continue;
+    const valid=quotes.filter(q=>Number.isFinite(Number(q.price))&&americanAllowed(Number(q.price))&&!q.withdrawn&&(baseLine===null||Number.isFinite(Number(q.point))&&Math.abs(Number(q.point)-baseLine)<.01)).sort((a,b)=>Date.parse(b.observed_at||0)-Date.parse(a.observed_at||0));
+    if(!valid.length)continue;
+    const quote=valid[0],seen=Date.parse(quote.observed_at||0);
+    if(!Number.isFinite(seen)||Date.now()-seen>24*3600*1000||seen-Date.now()>3600*1000)continue;
+    return{book:pickBookName(wanted),price:Number(quote.price),observedAt:quote.observed_at||null,point:quote.point??null};
+  }
+  return null;
+}
+function marketKindLabel(market){return market==='h2h'?'Moneyline':market==='spreads'?'Spread':market==='totals'?'Game total':market==='team_total'?'Team total':market}
+function gameRef(away,home){return [marketKey(away),marketKey(home)].join(':')}
+async function buildCrossGameParlay({league,date,props,hawkKey,warnings}){
+  const noResult=(reason,stats={})=>({available:false,gameCount:stats.gameCount||0,consideredMarkets:stats.consideredMarkets||0,reason,legs:[],legCount:0,combinedPrice:null,estimatedPrice:null,verifiedBook:null,status:'PASS — no cross-game parlay published'});
+  const playbookKey=process.env.PlaybookAPI;
+  const linesUrl=new URL('https://api.playbook-api.com/v1/lines');
+  linesUrl.searchParams.set('league',league);
+  if(playbookKey)linesUrl.searchParams.set('api_key',playbookKey);
+  const getJson=async(url,headers={},timeout=7000)=>{const response=await fetch(url,{headers:{Accept:'application/json',...headers},signal:AbortSignal.timeout(timeout)});if(!response.ok)throw Error('HTTP '+response.status);return(await response.json()).data||{}};
+  let lines=[];
+  if(playbookKey)try{
+    const data=await getJson(linesUrl);
+    lines=(Array.isArray(data)?data:[]).filter(g=>g.startTime&&etDate(g.startTime)===date&&g.homeTeamName&&g.awayTeamName);
+  }catch(e){warnings.push('Cross-game Playbook markets could not be retrieved.')}
+  const now=Date.now();
+  lines=lines.filter(g=>Date.parse(g.startTime)>now+60000);
+  const candidates=[],scoped=new Map();
+  for(const game of lines){
+    const ml=game.lines?.moneyline||{},sp=game.lines?.spread||{},tot=game.lines?.totalPrice||{};
+    const away=game.awayTeamName,home=game.homeTeamName,key=gameRef(away,home),startTime=game.startTime;
+    if(scoped.has(key))continue;scoped.set(key,game);
+    const add=(kind,selection,side,point,price,other,about)=>{
+      const raw=marketScore(price,other);
+      if(raw===null||!americanAllowed(Number(price))||raw<.51)return;
+      const core=Math.round(raw*82);
+      candidates.push({game:key,gameLabel:away+' @ '+home,gameStart:startTime,market:kind,marketLabel:marketKindLabel(kind),selection,side,point,price:null,aggregatePrice:Number(price),book:null,verifiedOdds:false,observedAt:null,marketShare:Number(raw.toFixed(3)),evidenceScore:core,reason:about+' Based on the listed two-sided aggregate market; a sportsbook offer and independent matchup advantage are not confirmed.',source:'Playbook aggregate',kind:'game'});
+    };
+    add('h2h',home+' moneyline','home',null,Number(ml.home),Number(ml.away),'Market favours '+home+'.');
+    add('h2h',away+' moneyline','away',null,Number(ml.away),Number(ml.home),'Market favours '+away+'.');
+    if(Number.isFinite(Number(sp.home))&&Number.isFinite(Number(sp.away))){
+      const format=(team,pt)=>team+' '+(pt>0?'+':'')+pt+' spread';
+      add('spreads',format(home,sp.home),'home',Number(sp.home),Number(sp.homePrice),Number(sp.awayPrice),'The listed handicap gives '+home+' '+(sp.home>=0?'a cushion':'a required margin')+'.');
+      add('spreads',format(away,sp.away),'away',Number(sp.away),Number(sp.awayPrice),Number(sp.homePrice),'The listed handicap gives '+away+' '+(sp.away>=0?'a cushion':'a required margin')+'.');
+    }
+    if(Number.isFinite(Number(game.lines?.total))){
+      const t=Number(game.lines.total);
+      add('totals','Over '+t+' total '+(league==='nhl'?'goals':league==='mlb'?'runs':'points'),'over',t,Number(tot.over),Number(tot.under),'The market favours the higher-scoring side of the listed total.');
+      add('totals','Under '+t+' total '+(league==='nhl'?'goals':league==='mlb'?'runs':'points'),'under',t,Number(tot.under),Number(tot.over),'The market favours the lower-scoring side of the listed total.');
+    }
+  }
+  // If there are multiple games, verify market-specific quotes with the preferred sportsbooks.
+  // Never silently turn an aggregate Playbook quote into a FanDuel, DraftKings or bet365 quote.
+  if(scoped.size>=2&&hawkKey){
+    try{
+      const season=Number(date.slice(0,4))-(league==='nfl'&&Number(date.slice(5,7))<3?1:0);
+      const source=await getJson(RANK_BASE+'/competitions/'+league+'/editions/'+season+'/games?date='+encodeURIComponent(date),{'X-API-Key':hawkKey},7000);
+      const gameMap=new Map();
+      for(const g of source.items||[]){
+        if(g.id&&g.home_team_name&&g.away_team_name&&etDate(g.kickoff)===date&&!['final','postponed','cancelled'].includes(g.status)){
+          const ref=gameRef(g.away_team_name,g.home_team_name);
+          if(!gameMap.has(ref))gameMap.set(ref,g);
+        }
+      }
+      const pickGames=[...scoped.keys()].filter(k=>gameMap.has(k)).slice(0,8);
+      const replies=await Promise.allSettled(pickGames.map(async k=>({
+        key:k,
+        data:await getJson(RANK_BASE+'/contests/'+gameMap.get(k).id+'/odds',{'X-API-Key':hawkKey},6500)
+      })));
+      for(const r of replies){
+        if(r.status!=='fulfilled')continue;
+        for(const m of r.value.data.items||[]){
+          if(!['h2h','spreads','totals','team_total'].includes(m.market)||m.period!=='full')continue;
+          const sideQuotes=m.sides||[];
+          for(const side of sideQuotes){
+            const outcome=side.outcome||{};
+            let selectionSide=outcome.slot||outcome.kind;
+            if(!selectionSide&&outcome.name){
+              const g=scoped.get(r.value.key);
+              if(g){if(marketKey(outcome.name)===marketKey(g.homeTeamName))selectionSide='home';if(marketKey(outcome.name)===marketKey(g.awayTeamName))selectionSide='away'}
+            }
+            if(!selectionSide)continue;
+            const existing=candidates.find(x=>x.game===r.value.key&&x.market===m.market&&x.side===selectionSide&&(x.point===null||Number(x.point)===Number((side.books?.fanduel||side.books?.draftkings||side.books?.bet365||[])[0]?.point??x.point)));
+            const quote=findBookQuote(side,existing?.point??null);
+            if(!quote)continue;
+            if(existing){
+              existing.price=quote.price;existing.book=quote.book;existing.verifiedOdds=true;existing.observedAt=quote.observedAt;existing.evidenceScore=Math.min(96,existing.evidenceScore+7);existing.source='StatsHawk '+quote.book+' quote + Playbook market';
+            }else if(m.market==='team_total'&&Number.isFinite(Number(quote.point))){
+              const subject=m.subject?.name||null,raw=impliedMarket(quote.price);
+              if(!subject||raw===null||raw<.54)continue;
+              candidates.push({game:r.value.key,gameLabel:scoped.get(r.value.key).awayTeamName+' @ '+scoped.get(r.value.key).homeTeamName,gameStart:scoped.get(r.value.key).startTime,market:'team_total',marketLabel:'Team total',selection:subject+' '+(selectionSide==='under'?'Under ':'Over ')+quote.point+' '+(league==='nhl'?'goals':league==='mlb'?'runs':'points'),side:selectionSide,point:Number(quote.point),price:quote.price,aggregatePrice:null,book:quote.book,verifiedOdds:true,observedAt:quote.observedAt,marketShare:null,evidenceScore:Math.round(raw*78),reason:'A posted team-total price is available. Team offensive form and defensive matchup still need independent confirmation.',source:'StatsHawk '+quote.book,kind:'game'});
+            }
+          }
+        }
+      }
+    }catch(e){warnings.push('Cross-game bookmaker verification is incomplete; aggregate market sources remain labeled.')}
+  }
+  for(const p of props){
+    const rate=p.last10?.rate,sample=p.last10?.games;
+    if(!p.player||!p.selection||!Number.isFinite(rate)||sample<4||rate<.70||!Number.isFinite(p.average))continue;
+    if(p.side==='Over'&&p.average<=p.line||p.side==='Under'&&p.average>=p.line)continue;
+    if(p.priced&&(!americanAllowed(Number(p.price))||Date.now()-Date.parse(p.observedAt||0)>24*3600*1000))continue;
+    const gameId=p.gameId||null;
+    let g=gameId?null:[...scoped.values()].find(x=>marketKey(p.team)===marketKey(x.homeTeamName)&&marketKey(p.opponent)===marketKey(x.awayTeamName)||marketKey(p.team)===marketKey(x.awayTeamName)&&marketKey(p.opponent)===marketKey(x.homeTeamName));
+    if(!g&&gameId){
+      // Only trust the actual game identity for player props, never an unrelated match by a partial name.
+      g=[...scoped.values()].find(x=>p.game&&marketKey(p.game)===marketKey(x.awayTeamName+' @ '+x.homeTeamName));
+    }
+    if(!g)continue;
+    const key=gameRef(g.awayTeamName,g.homeTeamName);
+    candidates.push({game:key,gameLabel:g.awayTeamName+' @ '+g.homeTeamName,gameStart:g.startTime,market:'player_prop',marketLabel:p.marketLabel||'Player prop',selection:p.player+' — '+p.selection,side:p.side,point:p.line,price:p.priced?p.price:null,aggregatePrice:null,book:p.priced?p.book:null,verifiedOdds:!!p.priced,observedAt:p.observedAt||null,marketShare:null,evidenceScore:Math.max(1,Math.min(95,(p.evidenceScore||50)-(sample<5?7:0)-(p.priced?0:8))),last5:p.last5,last10:p.last10,average:p.average,reason:p.player+' has recorded '+p.last10.hits+'/'+sample+' over this threshold in the most recent available games. Historical rate is not a calibrated win probability.',source:p.source||'StatsHawk player logs',kind:'player'});
+  }
+  candidates.sort((a,b)=>b.evidenceScore-a.evidenceScore||Number(b.verifiedOdds)-Number(a.verifiedOdds));
+  const chosen=[],seen=new Set();
+  for(const p of candidates){
+    if(seen.has(p.game))continue;
+    chosen.push(p);seen.add(p.game);
+    if(chosen.length>=7)break;
+  }
+  // At least four distinct matchups are required, never pad with a second leg from one game.
+  if(chosen.length<4)return noResult('Fewer than four distinct upcoming games have qualifying lines or research support. No cross-game parlay is forced.',{gameCount:scoped.size,consideredMarkets:candidates.length});
+  const distinctBooks=[...new Set(chosen.map(x=>x.book).filter(Boolean))];
+  const uniform=chosen.every(x=>x.verifiedOdds)&&distinctBooks.length===1;
+  let arithmeticEstimate=null;
+  if(uniform){
+    const decimal=chosen.reduce((acc,x)=>acc*(x.price>0?1+x.price/100:1+100/Math.abs(x.price)),1);
+    arithmeticEstimate=decimal>=2?'+'+Math.round((decimal-1)*100):String(-Math.round(100/(decimal-1)));
+  }
+  return{
+    available:true,league,date,gameCount:scoped.size,consideredMarkets:candidates.length,legs:chosen,legCount:chosen.length,
+    booksChecked:bookOrder,verifiedLegs:chosen.filter(x=>x.verifiedOdds).length,
+    combinedPrice:null,estimatedPrice:arithmeticEstimate,
+    verifiedBook:uniform?distinctBooks[0]:null,
+    status:uniform?'Research parlay · each leg quoted by '+distinctBooks[0]+'; combined payout not verified':'Research-only combination · one or more sportsbook-specific prices unavailable',
+    explanation:'One selection per game. Moneylines, spreads, game totals, team totals (if posted), and qualifying player props are evaluated. Ranking combines listed market-implied risk and available player history. Scores are not calibrated confidence, and independent defensive/injury verification is incomplete.',
+    notice:'No SGP-style cross-market correlation is inferred. Combined parlay odds must be verified directly at the sportsbook.'
+  };
+}
+
 async function rankedSlate(req,res,key,league,date){
   const headers={'X-API-Key':key,Accept:'application/json'};
   const warnings=[];
@@ -118,8 +264,9 @@ async function rankedSlate(req,res,key,league,date){
   const sgps=[];
   for(const [gid,entries] of groups){const sorted=entries.filter(x=>x.last10&&x.last10.games>=3&&x.last10.rate>=.65).sort((a,b)=>b.evidenceScore-a.evidenceScore);const unique=[],ids=new Set();for(const p of sorted){if(ids.has(p.personId))continue;ids.add(p.personId);unique.push(p);if(unique.length>=5)break}if(unique.length<3)continue;const legs=unique.slice(0,Math.min(5,unique.length));sgps.push({game:legs[0].game,gameId:legs[0].gameId||null,legs,legCount:legs.length,combinedPrice:null,book:legs.every(x=>x.book===legs[0].book)?legs[0].book:null,pricedLegs:legs.filter(x=>x.priced).length,rankScore:Math.round(legs.reduce((a,b)=>a+b.evidenceScore,0)/legs.length),status:'Research combination — SGP-specific combined odds and correlation not verified',notes:legs.some(x=>x.last10.games<5)?'Early-season data: do not interpret observed rates as future success probability.':'Correlation, lineup availability and combined payout still require bookmaker confirmation.'})}
   sgps.sort((a,b)=>b.rankScore-a.rankScore);
+  const crossGameParlay=await buildCrossGameParlay({league,date,props:props.slice(0,45),hawkKey:key,warnings});
   res.setHeader('Cache-Control','public,max-age=0,s-maxage=360,stale-while-revalidate=300');
-  return res.status(200).json({available:true,league,date,props:picked,candidateProps:props.slice(0,45),sgps:sgps.slice(0,3),candidatesEvaluated:props.length,pricedProps:picked.filter(x=>x.priced).length,warnings,modelStatus:'Historical research and exact posted bookmaker lines where available; not calibrated betting probabilities. Never infer a combined SGP payout.',sources:['StatsHawk statistical logs','StatsHawk sportsbook pregame quotes when posted']});
+  return res.status(200).json({available:true,league,date,props:picked,candidateProps:props.slice(0,45),sgps:sgps.slice(0,3),crossGameParlay,candidatesEvaluated:props.length,pricedProps:picked.filter(x=>x.priced).length,warnings,modelStatus:'Historical research and exact posted bookmaker lines where available; not calibrated betting probabilities. Never infer a combined SGP payout.',sources:['StatsHawk statistical logs','StatsHawk sportsbook pregame quotes when posted']});
 }
 
 const MARKETS={nhl:{sog:'Shots on goal',pts:'Points',goals:'Goals',assists:'Assists',blocks:'Blocked shots'},nfl:{rec:'Receptions','receiving.yards':'Receiving yards','rushing.yards':'Rushing yards','passing.yards':'Passing yards',targets:'Targets','rushing.att':'Rushing attempts','passing.att':'Passing attempts'},mlb:{'pitching.so':'Pitcher strikeouts',outs:'Pitcher outs','pitching.bb':'Pitcher walks','pitching.h':'Hits allowed',er:'Earned runs','batting.h':'Batter hits',total_bases:'Total bases'}};module.exports=async(req,res)=>{const league=String(req.query.league||'nhl').toLowerCase(),date=String(req.query.date||new Date().toISOString().slice(0,10)),stat=String(req.query.stat||({nhl:'sog',nfl:'rec',mlb:'pitching.so'}[league]||''));if(!MARKETS[league]||!Object.hasOwn(MARKETS[league],stat)||!/^(20\d{2})-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/.test(date))return res.status(400).json({error:'Invalid league, market or date'});const selectedLine=Number(req.query.line??(league==='nhl'?1.5:league==='nfl'?2.5:4.5));if(!Number.isFinite(selectedLine)||selectedLine<0||selectedLine>150)return res.status(400).json({error:'Invalid stat threshold'});const key=process.env.STATSHAWK_API_KEY;if(!key)return res.status(503).json({available:false,reason:'StatsHawk API key not configured',picks:[]});if(String(req.query.view||'')==='ranked')return rankedSlate(req,res,key,league,date);try{const u=new URL('https://api.statshawk.ai/v1/analysis/stat-board');for(const[k,v]of Object.entries({competition:league,date,stat,line:selectedLine,window:10,min_games:3,limit:250}))u.searchParams.set(k,v);const r=await fetch(u,{headers:{'X-API-Key':key,Accept:'application/json'},signal:AbortSignal.timeout(12000)});if(!r.ok)return res.status(r.status===401?502:r.status).json({available:false,reason:r.status===429?'StatsHawk quota exhausted':r.status===402||r.status===403?'StatsHawk plan does not allow this slate':'StatsHawk slate research unavailable',providerStatus:r.status,picks:[]});const p=await r.json(),data=p.data||{},raw=Array.isArray(data.recommended)?data.recommended:[],unconfirmed=(data.games_with_lineups??0)===0,watchlist=(data.full_slate||[]).filter(x=>x.person?.bio?.display_name&&Number.isFinite(x.window_rate)&&x.games_in_window>=3).sort((a,b)=>b.window_rate-a.window_rate||b.games_in_window-a.games_in_window).slice(0,10).map(x=>({player:x.person.bio.display_name,team:x.team?.name||null,opponent:x.opponent?.name||null,stat,sample:x.games_in_window,activityRate:x.window_rate,projectionSource:x.projection_source||null,line:data.line??null,lineupConfirmed:!unconfirmed})),picks=raw.filter(x=>x.person?.bio?.display_name&&Number.isFinite(x.window_rate)&&x.games_in_window>=5).sort((a,b)=>b.window_rate-a.window_rate||b.games_in_window-a.games_in_window).slice(0,10).map(x=>({player:x.person.bio.display_name,team:x.team?.name||null,stat,market:MARKETS[league][stat],observedLast10Rate:x.window_rate,seasonRate:x.season_rate??null,sample:x.games_in_window,opponent:x.opponent?.name||null,marketLine:Number.isFinite(Number(data.line))?Number(data.line):null,source:'StatsHawk stat board',projectionSource:x.projection_source||null,verifiedBet365Odds:false}));if(String(req.query.inspect||'')==='1')return res.json({market:stat,keys:Object.keys(data),line:data.line,examples:{recommended:(data.recommended||[]).slice(0,1),fullSlate:(data.full_slate||[]).slice(0,1)},stats:{recommended:(data.recommended||[]).length,fullSlate:(data.full_slate||[]).length}});res.setHeader('Cache-Control','public,max-age=0,s-maxage=600,stale-while-revalidate=300');return res.json({available:true,league,date,stat,market:MARKETS[league][stat],picks,watchlist,meta:{gamesWithLineups:data.games_with_lineups??null,gamesWithoutLineups:data.games_without_lineups??null,fullSlateCount:data.full_slate?.length??null,recommendedCount:raw.length,window:data.window??10,line:data.line??null},approvedBets:[],notice:'Observed historical rates at StatsHawk screening thresholds (often 0.5). Watchlist names may have unconfirmed lineup roles. Neither this line nor a historical rate is a bet365 offer or calibrated forecast.',fetchedAt:p.meta?.fetched_at||null})}catch(e){return res.status(502).json({available:false,reason:'StatsHawk analysis temporarily unreachable',picks:[]})}};
