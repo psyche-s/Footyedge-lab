@@ -23,7 +23,7 @@ async function publicSchedule(sport,date){
    const time=/^\d{1,2}:\d{2}$/.test(g.gametime||'')?g.gametime.padStart(5,'0'):null;
    const when=time?date+'T'+time+':00'+offset:null;
    const homeScore=g.home_score!==''?Number(g.home_score):null,awayScore=g.away_score!==''?Number(g.away_score):null;
-   const complete=Number.isFinite(homeScore)&&Number.isFinite(awayScore),team=(abbr,score)=>({name:names[abbr]||abbr,short:(names[abbr]||abbr).split(' ').slice(-1)[0],abbreviation:abbr,logo:'',score,record:null});
+   const complete=g.result!==''&&g.result!=null||Number.isFinite(homeScore)&&Number.isFinite(awayScore),team=(abbr,score)=>({name:names[abbr]||abbr,short:(names[abbr]||abbr).split(' ').slice(-1)[0],abbreviation:abbr,logo:'',score,record:null});
    return{id:g.game_id||date+'_'+g.away_team+'_'+g.home_team,date:when,status:complete?'Final':'Scheduled',state:complete?'post':'pre',detail:time?'nflverse scheduled time':'Kickoff time not verified',home:team(g.home_team,homeScore),away:team(g.away_team,awayScore),venue:g.stadium||'',league:'NFL',summaryAvailable:false};
   });
  }
