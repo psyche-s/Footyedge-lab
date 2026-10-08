@@ -155,6 +155,53 @@ async function buildCrossGameParlay({league,date,props,hawkKey,warnings}){
   };
 }
 
+
+function availabilityFromRoster(entry){
+  if(!entry)return{status:'not_verified',label:'Lineup not verified',risk:'No matched roster record'};
+  const injury=entry.injury||entry.person?.injury||null,raw=String(injury?.status||'').trim(),state=raw.toLowerCase();
+  const absent=/\b(out|injured reserve|ir|inactive|suspended|ruled out|disabled list|injured list|il-)\b/.test(state);
+  const uncertain=/questionable|doubtful|game.time.decision|day.to.day|day to day|probable/.test(state);
+  const source=entry.source||entry.membership_source||null;
+  if(absent)return{status:'out',label:raw||'Unavailable',risk:'Excluded: reported unavailable',injuryType:injury?.injury_type||null};
+  if(uncertain)return{status:'uncertain',label:raw||'Game status uncertain',risk:'Flagged: availability needs game-day confirmation',injuryType:injury?.injury_type||null};
+  if(source==='membership')return{status:'unconfirmed',label:raw||'Roster member only',risk:'No confirmed recent appearance; starting role unverified'};
+  return{status:'rostered',label:raw==='Active'?'Active report; starter unconfirmed':'Rostered; starting lineup unconfirmed',risk:'Lineup, special-teams/usage role and minutes need confirmation'};
+}
+function formTrend(props){
+  for(const p of props){
+    const recent=p.last5,base=p.last10,avg5=Number(p.averages?.last_5??p.avgLast5),avg10=Number(p.averages?.last_10??p.average);
+    const enough=(base?.games||0)>=7&&(recent?.games||0)>=3;
+    const delta=enough?recent.rate-base.rate:null;
+    const vdelta=enough&&Number.isFinite(avg5)&&Number.isFinite(avg10)?avg5-avg10:null;
+    p.form={last5:recent?.rate??null,last10:base?.rate??null,hitRateChange:delta,averageLast5:Number.isFinite(avg5)?avg5:null,averageLast10:Number.isFinite(avg10)?avg10:null,averageChange:vdelta,read:!enough?'Limited sample':delta>=.14?'Improving':delta<=-.14?'Cooling':'Stable'};
+    // Small adjustment: repeatable recent form affects ranking, but does not create fake model certainty.
+    if(delta!==null)p.evidenceScore=Math.max(1,Math.min(96,p.evidenceScore+Math.round(Math.max(-7,Math.min(7,delta*22)))));
+  }
+}
+async function applyRosterAvailability(props,league,key,fetchData,warnings){
+  if(!['nhl','nfl'].includes(league)||!props.length)return;
+  const teams=[...new Set(props.slice().sort((a,b)=>b.evidenceScore-a.evidenceScore).slice(0,26).map(x=>x.teamId).filter(x=>/^team_[a-z0-9]{18,40}$/.test(x)))].slice(0,16);
+  if(!teams.length){warnings.push('Player starting lineups could not be verified. Trends are historical only.');return}
+  const results=await Promise.allSettled(teams.map(async id=>{
+    const roster=await fetchData(RANK_BASE+'/teams/'+id+'/roster',6800);
+    const rows=Array.isArray(roster.items)?roster.items:Array.isArray(roster.players)?roster.players:Array.isArray(roster.roster)?roster.roster:[];
+    const record=new Map(rows.map(p=>[p.person_id||p.person?.id||p.person||'',p]));
+    return{id,record};
+  }));
+  const rosterMap=new Map(results.filter(x=>x.status==='fulfilled').map(x=>[x.value.id,x.value.record]));
+  let excluded=0,flagged=0;
+  for(let i=props.length-1;i>=0;i--){
+    const p=props[i],entry=rosterMap.get(p.teamId)?.get(p.personId),info=availabilityFromRoster(entry);
+    p.availability=info;p.lineupConfirmed=false;
+    if(info.status==='out'){props.splice(i,1);excluded++;continue}
+    if(info.status==='uncertain'){p.evidenceScore=Math.max(1,p.evidenceScore-11);flagged++}
+    if(info.status==='unconfirmed')p.evidenceScore=Math.max(1,p.evidenceScore-7);
+  }
+  if(excluded)warnings.push(excluded+' player(s) excluded due to reported absence or injured-list status.');
+  if(flagged)warnings.push(flagged+' questionable / day-to-day player(s) flagged and down-ranked.');
+  warnings.push('An active roster does not confirm an NHL line combination, power-play role or NFL starting snap count. Check game-day lineup.');
+}
+
 async function rankedSlate(req,res,key,league,date){
   const headers={'X-API-Key':key,Accept:'application/json'};
   const warnings=[];
@@ -200,7 +247,7 @@ async function rankedSlate(req,res,key,league,date){
         if(!l||l.games<3)continue;
         const a=p.averages||{};const recentAvg=Number(a.last_10??a.season);if(!Number.isFinite(recentAvg)||(q.side==='Over'&&recentAvg<=q.line)||(q.side==='Under'&&recentAvg>=q.line))continue;
         const score=l.rate*.57+lowerBound(l.hits,l.games)*.31+Math.min(l.games,10)/10*.12;
-        props.push({player:q.person.name||p.person?.bio?.display_name||'Unknown',personId:q.person.id,position:p.person?.bio?.position||null,opponentId:p.opponent?.team_id||null,team:p.team?.name||null,opponent:p.opponent?.name||null,game:q.game.away_team_name+' @ '+q.game.home_team_name,gameId:q.game.id,market:q.measure,marketLabel:marketName[q.measure]||q.measure,side:q.side,line:q.line,selection:playerThreshold(q.measure,q.line,q.side),book:q.book==='fanduel'?'FanDuel':q.book==='draftkings'?'DraftKings':'bet365',price:q.price,observedAt:q.observedAt,last5:stats.last5,last10:stats.last10,season:stats.season,average:a.last_10??a.season??null,evidenceScore:Math.round(score*100),sampleNote:l.games<5?'Small sample — early season':'Historical sample; not a prediction',lineupConfirmed:false,priced:true,source:'StatsHawk sportsbook odds + player game logs'});
+        props.push({player:q.person.name||p.person?.bio?.display_name||'Unknown',personId:q.person.id,position:p.person?.bio?.position||null,opponentId:p.opponent?.team_id||null,team:p.team?.name||null,opponent:p.opponent?.name||null,game:q.game.away_team_name+' @ '+q.game.home_team_name,gameId:q.game.id,market:q.measure,marketLabel:marketName[q.measure]||q.measure,teamId:q.game.home_team_name===p.team?.name?q.game.home_team:q.game.away_team_name===p.team?.name?q.game.away_team:null,avgLast5:a.last_5??null,side:q.side,line:q.line,selection:playerThreshold(q.measure,q.line,q.side),book:q.book==='fanduel'?'FanDuel':q.book==='draftkings'?'DraftKings':'bet365',price:q.price,observedAt:q.observedAt,last5:stats.last5,last10:stats.last10,season:stats.season,average:a.last_10??a.season??null,evidenceScore:Math.round(score*100),sampleNote:l.games<5?'Small sample — early season':'Historical sample; not a prediction',lineupConfirmed:false,priced:true,source:'StatsHawk sportsbook odds + player game logs'});
       }
       if(!props.length)warnings.push('No player prop offers met the minimum historical sample and price requirements.');
     }catch(e){warnings.push('NFL player markets temporarily unavailable: '+e.message)}
@@ -221,7 +268,7 @@ async function rankedSlate(req,res,key,league,date){
         if(!l||l.games<3)continue;
         const avg=Number(card.averages?.last_10??card.averages?.season)||0;if(league==='nhl'&&(l.rate<.5||avg<1.5))continue;if(league==='mlb'&&(l.rate<.5||avg<4.2))continue;
         const score=l.rate*.53+lowerBound(l.hits,l.games)*.27+Math.min(avg/(line+1.15),1)*.2;
-        props.push({player:c.person.bio.display_name,personId:c.person.id,position:c.person?.bio?.position||null,teamId:c.team?.team_id||null,opponentId:c.opponent?.team_id||null,team:c.team?.name||null,opponent:c.opponent?.name||null,game:[c.team?.name,c.opponent?.name].filter(Boolean).join(' vs '),gameId:null,market:metric,marketLabel:marketName[metric],side:'Over',line,selection:playerThreshold(metric,line,'Over'),book:null,price:null,observedAt:null,last5:stat.last5,last10:stat.last10,season:stat.season,average:avg,evidenceScore:Math.round(score*100),sampleNote:l.games<5?'Small early-season sample; lineup unconfirmed':'No bookmaker offer verified; lineup unconfirmed',lineupConfirmed:false,priced:false,source:'StatsHawk historical player game logs'});
+        props.push({player:c.person.bio.display_name,personId:c.person.id,position:c.person?.bio?.position||null,teamId:c.team?.team_id||null,opponentId:c.opponent?.team_id||null,team:c.team?.name||null,opponent:c.opponent?.name||null,game:[c.team?.name,c.opponent?.name].filter(Boolean).join(' vs '),gameId:null,market:metric,marketLabel:marketName[metric],avgLast5:card.averages?.last_5??null,side:'Over',line,selection:playerThreshold(metric,line,'Over'),book:null,price:null,observedAt:null,last5:stat.last5,last10:stat.last10,season:stat.season,average:avg,evidenceScore:Math.round(score*100),sampleNote:l.games<5?'Small early-season sample; lineup unconfirmed':'No bookmaker offer verified; lineup unconfirmed',lineupConfirmed:false,priced:false,source:'StatsHawk historical player game logs'});
       }
       if(!props.length&&league==='nhl')warnings.push('No skater has enough logged games for a qualified shot-volume research shortlist.');
       if(league==='nhl')warnings.push('NHL shots props are research lines (2+ SOG). No bet365, DraftKings or FanDuel SOG prices were returned by the accessible odds feed.');
@@ -259,6 +306,8 @@ async function rankedSlate(req,res,key,league,date){
     }catch(e){props.length=0;warnings.push('Starting pitcher confirmation unavailable. No MLB picks have been published without that verification.')}
   }
   if(league==='mlb'&&!props.length)warnings.push('No verified starting-pitcher props passed the research filters today.');
+  formTrend(props);
+  await applyRosterAvailability(props,league,key,fetchData,warnings);
   props.sort((a,b)=>b.evidenceScore-a.evidenceScore||(b.last10?.games||0)-(a.last10?.games||0));
   const picked=[],seen=new Set();for(const p of props){if(!seen.has(p.personId)){picked.push(p);seen.add(p.personId)}if(picked.length===10)break}
   const groups=new Map();
