@@ -574,8 +574,8 @@ function bindTeamH2Hs(root){
 }
 
 function crossGameSelection(p){
-  const odds=p.verifiedOdds?'<strong>'+esc(p.book)+' '+esc(amPrice(p.price))+'</strong><small>'+esc(quoteDate(p.observedAt))+'</small>':Number.isFinite(p.aggregatePrice)?'<strong>Playbook '+esc(amPrice(p.aggregatePrice))+'</strong><small>Price may differ at your sportsbook</small>':'<strong>Odds unavailable</strong><small>Research threshold</small>';
-  const evidence=p.last10?.games?'Historical over-line: '+statSummary(p.last10)+' · '+(Number.isFinite(p.average)?'Avg '+Number(p.average).toFixed(1):'No average'):(p.marketEvidence?.verified?'Independent team form: '+p.marketEvidence.evidence:'Market-implied share: '+(Number.isFinite(p.marketShare)?Math.round(p.marketShare*100)+'% (vig removed)':'Unavailable')+' · not an independently confirmed edge');
+  const odds=p.verifiedOdds?'<strong>'+esc(p.book)+' '+esc(amPrice(p.price))+'</strong><small>'+esc(quoteDate(p.observedAt))+'</small>':'<strong>Check odds</strong><small>At your sportsbook</small>';
+  const evidence=p.last10?.games?'Hit in '+statSummary(p.last10)+' recent games'+(Number.isFinite(p.average)?' · Average '+Number(p.average).toFixed(1):''):(p.marketEvidence?.verified?'Recent team results support this line.':'Insufficient verified matchup history for this price.');
   return '<div class="cross-leg"><div class="cross-leg-side"><span class="cross-market">'+esc(p.marketLabel||'Market')+'</span><strong>'+esc(p.selection)+'</strong><span class="tiny">'+esc(p.gameLabel)+'</span><span class="cross-evidence">'+esc(evidence)+'</span></div><div class="cross-leg-quote">'+odds+'</div>'+(p.kind==='player'?propBreakdownMarkup(p):teamH2HMarkup(p))+'</div>';
 }
 function renderCrossGame(c,compact=false){
@@ -584,7 +584,7 @@ function renderCrossGame(c,compact=false){
   }
   const quoted=Number(c.verifiedLegs||0),total=c.legCount||c.legs.length;
   const estimated=c.estimatedPrice&&quoted===total?'<div class="cross-estimate"><span>Estimated combined odds</span><strong>'+esc(c.estimatedPrice)+'</strong><small>Confirm final price with your sportsbook</small></div>':'<div class="cross-estimate"><span>Combined odds</span><strong>Check sportsbook</strong></div>';
-  return '<article class="edge-card cross-card"><div class="edge-cardtop"><div class="edge-rank">★</div><div class="edge-player"><strong>Best cross-game parlay</strong><span class="edge-vs">'+esc(total)+' different games · '+esc(c.league?.toUpperCase()||sport)+' · '+esc(c.date||iso(day()))+'</span></div><span class="edge-status">'+esc(quoted===total?'All legs individually priced':'Odds to check')+'</span></div><div class="cross-lines">'+c.legs.map(crossGameSelection).join('')+'</div>'+estimated+'<details class="edge-details"><summary>Why these picks?</summary><p>'+esc(c.explanation||'These selections had the strongest available form and matchups.')+'</p><p>Check the prices, lineup and combined parlay at your sportsbook before playing.</p></details></article>';
+  return '<article class="edge-card cross-card"><div class="edge-cardtop"><div class="edge-rank">★</div><div class="edge-player"><strong>Best cross-game parlay</strong><span class="edge-vs">'+esc(total)+' different games · '+esc(c.league?.toUpperCase()||sport)+' · '+esc(c.date||iso(day()))+'</span></div><span class="edge-status">'+esc(quoted===total?'All legs individually priced':'Odds to check')+'</span></div><div class="cross-lines">'+c.legs.map(crossGameSelection).join('')+'</div>'+estimated+'<details class="edge-details"><summary>Why these picks?</summary><p>Each selection has been checked against recent results and its matchup. They come from different games, so we are not relying on a single game going our way.</p><p>Check current lineups and the final combined odds before playing.</p></details></article>';
 }
 async function loadCrossGameParlay(s,date,refresh=false){
   const root=document.getElementById('crossgame');if(!root)return;
