@@ -50,3 +50,25 @@ test('A small three-game GA/GP sample is descriptive and not a verified elite tr
  assert.equal(n.hasReliableCurrentSeasonSample,false);
  assert.equal(n.positions.C.gaPerGame,1);
 });
+
+
+test('SOG allowed by position is a separately verified full-game group total',()=>{
+ const b=box(2026021001);
+ b.playerByGameStats.homeTeam.forwards[0].sog=3;
+ b.playerByGameStats.homeTeam.forwards[1].sog=1;
+ b.playerByGameStats.awayTeam.forwards[0].sog=2;
+ b.playerByGameStats.awayTeam.forwards[1].sog=4;
+ const g=POS.game(b,'2026-10-09');
+ assert.equal(g.verified,true);
+ assert.equal(g.shotPositionVerified,true);
+ const ny=POS.allowed('NYR',[g],'2026-10-09');
+ assert.equal(ny.shotAvailable,true);
+ assert.equal(ny.shotGames,1);
+ assert.equal(ny.shotPositions.RW.shotsAllowed,4);
+ assert.equal(ny.shotPositions.C.shotsPerGame,2);
+ assert.equal(ny.shotPositions.LW.shotsPerGame,0);
+ assert.equal(ny.hasReliableShotSample,false);
+ const bad=box(2026021002);
+ assert.equal(POS.game(bad,'2026-10-09').shotPositionVerified,false);
+ assert.equal(POS.allowed('NYR',[POS.game(bad,'2026-10-09')],'2026-10-09').shotAvailable,false);
+});
