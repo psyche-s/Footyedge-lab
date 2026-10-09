@@ -37,6 +37,7 @@ test('Past game final cannot leak into pregame slate for the same date',()=>{
  const parsed=P.parseGame(game(2026020001,'2026-10-09'),'2026-10-09');
  assert.equal(parsed.verified,false);
  assert.ok(P.parseGame({...game(2026020001,'2026-10-08'),gameState:'LIVE'},'2026-10-09').verified===false);
+ assert.equal(P.parseGame({...game(2026020001,'2026-10-08'),gameDate:null},'2026-10-09').verified,false);
 });
 test('Team summaries show sample size, prior-year warning, observed PDO, no fictitious RAPM or xG',()=>{
  const games=[P.parseGame(game(2025020001,'2026-04-01'),'2026-10-09'),
