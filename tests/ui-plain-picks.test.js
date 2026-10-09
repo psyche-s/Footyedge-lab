@@ -82,7 +82,7 @@ test('Pick freshness is understandable and source/provider details hidden',()=>{
 });
 
 test('Shots card keeps 5v5 team possession distinct from per-position props',()=>{
- const p={...pick,opponentPossession:{verified:true,team:'SEA',games:3,currentSeasonGames:2,
+ const p={...pick,opponentPossession:{verified:true,team:'SEA',games:3,currentSeasonGames:3,
   sogAgainstPerGame:18,corsiPct:.53,fenwickPct:.50}};
  const h=app.makePropCard(p,0);
  assert.ok(h.includes('18.0 total shots per game'));
