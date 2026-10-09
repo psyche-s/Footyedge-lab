@@ -10,3 +10,5 @@ Friday Oct 9 2026 owner immediate NHL reload, second post-upgrade check: verifie
 Friday October 9 early afternoon: refresh/publish NHL slate again with new source-backed CBJ/PIT/SEA injury exclusions and WSH uncertainty. Read latest GitHub main, publish corrected cards as a data-only GitHub release; keep the 4 PM ET pregame freeze intact. Source file ops/nhl-availability-2026-10-09.json.
 
 2026-10-09 afternoon NHL research refresh: check and publish verified opponent-position full-game SOG together with scoring GA/GP, L5/L10 and dated 2025/26 H2H. Include explanatory early-season sample notes. Publish through GitHub Actions release (no Vercel build). Preserve the scheduled 4 PM ET final pregame refresh and freeze. Never infer sportsbook odds or unverified events.
+
+Retry after reconciling SportsLab clean-card regression tests with current displayed language. Preserve previous live release if tests fail. Publish current-day NHL only after tests pass; scheduled 4 PM ET final freeze unchanged.
