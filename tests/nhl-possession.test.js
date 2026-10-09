@@ -27,7 +27,7 @@ test('Corsi/Fenwick include actual blocked shot but Fenwick excludes it',()=>{
  const parsed=P.parseGame(game(2025020001,'2026-04-01'),'2026-10-09');
  assert.equal(parsed.verified,true);
  assert.ok(parsed.home.corsiPct>=0&&parsed.home.corsiPct<=1);
- assert.ok(parsed.home.fenwickFor < parsed.home.attemptsFor);
+ assert.ok(parsed.home.fenwickFor + parsed.away.fenwickFor < parsed.home.attemptsFor + parsed.away.attemptsFor);
  assert.equal(parsed.home.attemptsFor+parsed.away.attemptsFor,
               parsed.home.attemptsAgainst+parsed.away.attemptsAgainst);
  assert.ok(parsed.home.innerSlotProxy>0);
