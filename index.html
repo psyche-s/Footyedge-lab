@@ -335,53 +335,55 @@ function friendlyStat(p){
  return names[k]||String(p.marketLabel||'events').toLowerCase();
 }
 function plainWhy(p,scoring=false){
- const words=[],last=p.last10||{},recent=p.last5||{},kind=friendlyStat(p);
- if(last.games>0)words.push('Hit this line in '+last.hits+' of the last '+last.games+' games'+
-  (recent.games>=3?', including '+recent.hits+' of the last '+recent.games+' recently':'')+'.');
- else words.push('There are not enough recent games to establish a strong trend.');
- if(!scoring&&p.average!=null&&Number.isFinite(Number(p.average))&&p.line!=null&&Number.isFinite(Number(p.line))){
-  const n=Number(p.line),over=String(p.side||'Over').toLowerCase()!=='under';
-  const threshold=over&&Number.isInteger(n+0.5)?String(n+0.5)+'+':(over?'over ':'under ')+n;
-  words.push('Average: '+Number(p.average).toFixed(1)+' '+kind+' per game; this pick needs '+threshold+'.');
+ const line=p.line!=null?Number(p.line):null,last=p.last10||{},last5=p.last5||{},
+  market=friendlyStat(p),side=String(p.side||'Over').toLowerCase(),parts=[];
+ const threshold=Number.isFinite(line)?(
+  side==='over'&&Number.isInteger(line+.5)?(line+.5)+'+ ':side==='over'?'over '+line+' ':'under '+line+' '
+ ):'';
+ const textMarket=threshold+market;
+ if(last.games>=3&&Number.isFinite(Number(last.hits))){
+  parts.push('This line landed in '+last.hits+' of the last '+last.games+' games'+
+   (last5.games>=3?' ('+last5.hits+' of the last '+last5.games+' most recent).':'.'));
+ }else parts.push('Recent results are limited, so this is an early research pick.');
+ if(!scoring&&Number.isFinite(Number(p.average))&&p.average!=null){
+  const avg=Number(p.average);
+  parts.push('Average '+avg.toFixed(1)+' '+market+' per game'+(threshold?' against a '+textMarket+' pick.':'.'));
  }
- const byPosition=p.positionAllowed;
- if(!scoring&&byPosition?.available&&Number(byPosition.games)>=3&&
-    Number.isFinite(Number(byPosition.averagePerPlayer))&&p.position){
-  words.push('Opposing players at the same position have averaged '+Number(byPosition.averagePerPlayer).toFixed(1)+
-    ' '+kind+' over the last '+byPosition.games+' games.');
+ const matches=p.h2h?.summary;
+ if(matches?.games>=3&&Number.isFinite(Number(matches.hits))){
+  parts.push('Against this opponent, the same line landed '+matches.hits+' of '+matches.games+' times.');
  }
- const h=p.h2h?.summary;
- if(h?.games>=2)words.push('Against this opponent, '+h.hits+' of '+h.games+' past games hit the line.');
- const op=p.opponentPossession;
- if(!scoring&&String(p.league||'').toLowerCase()==='nhl'&&op?.verified&&
-    op.currentSeasonGames>=3&&Number.isFinite(op.sogAgainstPerGame)){
-  words.push('The opponent allows '+op.sogAgainstPerGame.toFixed(1)+' shots at 5-on-5 per game recently.');
+ const opp=p.opponentPossession;
+ if(String(p.league||'').toLowerCase()==='nhl'&&opp?.verified&&opp.currentSeasonGames>=3&&
+     Number.isFinite(opp.sogAgainstPerGame)&&(!scoring||market==='shots')){
+  parts.push('The opponent recently allowed '+opp.sogAgainstPerGame.toFixed(1)+' shots on goal per game at even strength.');
+ }else if(!scoring&&p.positionAllowed?.available&&Number(p.positionAllowed.games)>=3&&
+      Number.isFinite(p.positionAllowed.averagePerPlayer)){
+  parts.push('Players at this position averaged '+p.positionAllowed.averagePerPlayer.toFixed(1)+' '+market+' against this opponent.');
  }
  const usage=p.usage;
- if(usage?.verified&&usage.currentSeasonGames>=5&&
-   Number.isFinite(usage.toiChangeMinutes)&&Math.abs(usage.toiChangeMinutes)>=1.3){
-  words.push('Ice time has '+(usage.toiChangeMinutes>0?'increased':'decreased')+' recently.');
+ if(String(p.league||'').toLowerCase()==='nhl'&&usage?.verified&&usage.currentSeasonGames>=5&&
+    Number.isFinite(usage.toiChangeMinutes)&&Math.abs(usage.toiChangeMinutes)>=1.5){
+   parts.push('Playing time is '+(usage.toiChangeMinutes>0?'rising':'falling')+' recently.');
  }
- if(scoring){
-  if(String(p.league||'').toLowerCase()==='nhl'&&p.opportunity?.verified&&p.opportunity.last10Average!=null&&
-     Number.isFinite(Number(p.opportunity.last10Average))){
-   words.push('Shot volume: '+Number(p.opportunity.last10Average).toFixed(1)+' per game.');
-  }
-  words.push('Scoring plays are less predictable than shots or yardage.');
+ if(scoring&&p.opportunity?.verified&&Number.isFinite(p.opportunity.last10Average)&&
+    String(p.league||'').toLowerCase()==='nhl'){
+   parts.push('He has averaged '+p.opportunity.last10Average.toFixed(1)+' shots per game, supporting his chance to score.');
  }
- return words.slice(0,4).join(' ');
+ return parts.slice(0,3).join(' ');
 }
 function pickSafetyNote(p){
- const a=String(p.availability?.status||'').toLowerCase();
- if(['out','inactive','confirmed_out'].includes(a))
-  return '<div class="plain-risk">Unavailable — do not play.</div>';
- if(['questionable','doubtful','uncertain'].includes(a))
-  return '<div class="plain-risk">Confirm the player is available before playing.</div>';
+ const a=String(p.availability?.status||'').toLowerCase(),flags=p.quality?.flags||[];
+ if(['out','inactive','confirmed_out'].includes(a))return '<div class="plain-risk">Player is out — skip this pick.</div>';
+ if(['questionable','doubtful','uncertain'].includes(a))return '<div class="plain-risk">Check injury status before playing.</div>';
+ if(flags.includes('starting_qb_change'))return '<div class="plain-risk">Starting quarterback change could affect opportunities.</div>';
+ if(flags.includes('ice_time_recently_declining'))return '<div class="plain-risk">Recent playing time is down.</div>';
+ if(flags.includes('role_volume_not_verified')&&String(p.league||'').toLowerCase()==='nhl'&&
+   ['goals','assists','pts'].includes(String(p.market||'')))return '<div class="plain-risk">Confirm tonight’s line and power-play role.</div>';
  return '';
 }
 function plainWhyMarkup(p,scorer=false){
- return '<div class="plain-why"><strong>Why this pick</strong><p>'+esc(plainWhy(p,scorer))+
-  '</p></div>'+pickSafetyNote(p);
+ return '<div class="plain-why"><strong>Why this pick</strong><p>'+esc(plainWhy(p,scorer))+'</p></div>'+pickSafetyNote(p);
 }
 
 function scoringPickCard(p,i){
@@ -392,13 +394,13 @@ function scoringPickCard(p,i){
 }
 async function loadScoringBoard(selectedSport,date,refresh=false){
   const box=document.getElementById('scorerboard');if(!box)return;
-  box.innerHTML='<div class="edge-skeleton">Analyzing goal production, touchdown opportunities, home-run form, role volume and injury reports…</div>';
+  box.innerHTML='<div class="edge-skeleton">Checking possible goal scorers and touchdown picks…</div>';
   try{
     const p=await getScoring(selectedSport,date,refresh);
     if(tab!=='scorers'||sport!==selectedSport||!box.isConnected)return;
     box.innerHTML=(p.groups||[]).map(g=>'<section class="scorer-group"><div class="scorer-grouphead"><h3>'+esc(g.title)+'</h3><span class="tiny">'+esc(g.picks?.length||0)+' research candidates</span></div>'+(g.picks?.length?'<div class="edge-stack">'+g.picks.map(scoringPickCard).join('')+'</div>':'<div class="edge-card"><strong>No qualifying candidates today</strong><p class="tiny">Insufficient scoring history, role or game data. No forced goal/TD/HR selections.</p></div>')+'</section>').join('');
     box.innerHTML=publicSourceNotice(p)+box.innerHTML;bindPropBreakdowns(box);
-    const count=document.getElementById('scorerscoverage');if(count)count.textContent=(p.scorers?.length||0)+' scoring-event candidates · '+(p.scorers||[]).filter(x=>x.priced).length+' with posted sportsbook odds';
+    const count=document.getElementById('scorerscoverage');if(count)count.textContent=(p.scorers?.length||0)+' possible scorers · '+(p.scorers||[]).filter(x=>x.priced).length+' with posted sportsbook odds';
   }catch(e){
     box.innerHTML='<div class="edge-card"><strong>Scoring-event research unavailable</strong><p class="tiny">'+esc(e.message||'Upstream data temporarily unavailable')+'</p><button class="edge-retry">Retry</button></div>';
     box.querySelector('button')?.addEventListener('click',()=>loadScoringBoard(selectedSport,date,true));
@@ -452,52 +454,9 @@ function pickMini(p){
   '<p class="mini-why">'+esc(plainWhy(p).split('. ').slice(0,2).join('. '))+'</p>'+
   propBreakdownMarkup(p)+'</div>';
 }
-function shortOddsNote(x){return x.priced?'Exact listed quote; check freshness before placing a bet.':'Model line for research only — bet365 / DraftKings / FanDuel price not found.'}
+function shortOddsNote(x){return x.priced?'Exact listed quote; check freshness before placing a bet.':'Check the sportsbook for this line and price.'}
 
 
-
-function nhlPossessionMarkup(p){
-  if(String(p?.league||'').toLowerCase()!=='nhl')return'';
-  const t=p.teamPossession,o=p.opponentPossession;
-  if(!t?.verified&&!o?.verified)return'';
-  const fmt=x=>Number.isFinite(x)?x.toFixed(1):'—';
-  const pct=x=>Number.isFinite(x)?(x*100).toFixed(1)+'%':'—';
-  const team=String(p.team||'Our team'),opponent=String(p.opponent||'Opponent');
-  const row=(label,piece,who)=>{
-    if(!piece?.verified)return'';
-    return '<div class="nhl-pbp-team"><b>'+esc(label)+'</b>'+
-     '<div class="nhl-pbp-metrics"><span>CF% <strong>'+esc(pct(piece.corsiPct))+'</strong></span>'+
-     '<span>FF% <strong>'+esc(pct(piece.fenwickPct))+'</strong></span>'+
-     '<span>5v5 SOG against <strong>'+esc(fmt(piece.sogAgainstPerGame))+'/game</strong></span>'+
-     '<span>Slot-area attempt proxy <strong>'+esc(fmt(piece.innerSlotLocationProxyPerGame))+'/game</strong></span></div>'+
-     '<small>'+esc(piece.games)+' prior completed games · '+esc(piece.currentSeasonGames)+' from the current season</small></div>';
-  };
-  return '<details class="nhl-pbp-box"><summary>Verified 5v5 possession &amp; opponent shot environment</summary>'+
-   '<div class="nhl-pbp-inner">'+row(team,t,true)+row(opponent,o,false)+
-   '<p class="tiny">Official NHL 5v5 play-by-play. CF% = all shot attempts; FF% = unblocked attempts. Shot counts are 5v5 only, not full-game saves or SOG. The slot-area count is a geometric location proxy, not official high-danger chances or expected goals. Early-season samples may include a prior season.</p>'+
-   '<p class="tiny"><strong>RAPM:</strong> Not yet trained on validated complete on-ice stints. No RAPM or xG rating is invented. PDO is not an automatic betting signal.</p></div></details>';
-}
-
-function nhlUsageMarkup(p){
-  const u=p?.usage;
-  if(!u?.verified)return'';
-  const fmt=x=>x!=null&&Number.isFinite(Number(x))?Number(x).toFixed(1):'—';
-  const shot=u.shotsPer60!=null&&Number.isFinite(Number(u.shotsPer60))?fmt(u.shotsPer60)+' shots/60':'Not available';
-  const points=Number.isInteger(u.powerPlayPointsLast10)?String(u.powerPlayPointsLast10):'—';
-  const early=(u.currentSeasonGames||0)<5;
-  return '<div class="nhl-usage"><strong>Verified NHL opportunity · L'+esc(u.games)+'</strong>'+
-    '<div class="nhl-usage-grid"><span><b>TOI L5</b>'+esc(fmt(u.averageToiLast5))+'m</span>'+
-    '<span><b>TOI L10</b>'+esc(fmt(u.averageToiLast10))+'m</span>'+
-    '<span><b>Shots / 60</b>'+esc(shot)+'</span>'+
-    '<span><b>PP points L10</b>'+esc(points)+'</span></div>'+
-    '<small>'+esc(early?'Early current-season sample: prior-season games included. ':'')+'Past TOI and power-play points do not verify PP1 placement or tonight’s lineup.</small></div>';
-}
-
-function researchRisk(p){
-  const q=p?.quality;if(!q)return'';
-  const explain=(q.flags||[]).slice(0,6).map(value=>String(value).replaceAll('_',' ')).join(' · ');
-  return '<div class="research-risk"><strong>Evidence '+esc(q.score)+'/95</strong><span>Not win probability · '+esc(q.readiness||'research')+'</span>'+(explain?'<small>'+esc(explain)+'</small>':'')+'</div>';
-}
 
 function makePropCard(p,i){
  return '<article class="edge-card prop-result"><div class="edge-cardtop"><div class="edge-rank">'+(i+1)+'</div><div class="edge-player"><strong>'+esc(p.player)+'</strong><span class="edge-vs">'+esc(p.game||[p.team,p.opponent].filter(Boolean).join(' vs '))+'</span></div>'+priceTag(p)+'</div>'+
@@ -551,7 +510,7 @@ function bindTeamH2Hs(root){
 }
 
 function crossGameSelection(p){
-  const odds=p.verifiedOdds?'<strong>'+esc(p.book)+' '+esc(amPrice(p.price))+'</strong><small>'+esc(quoteDate(p.observedAt))+'</small>':Number.isFinite(p.aggregatePrice)?'<strong>Playbook '+esc(amPrice(p.aggregatePrice))+'</strong><small>Aggregate only · not a sportsbook quote</small>':'<strong>Odds unavailable</strong><small>Research threshold</small>';
+  const odds=p.verifiedOdds?'<strong>'+esc(p.book)+' '+esc(amPrice(p.price))+'</strong><small>'+esc(quoteDate(p.observedAt))+'</small>':Number.isFinite(p.aggregatePrice)?'<strong>Playbook '+esc(amPrice(p.aggregatePrice))+'</strong><small>Price may differ at your sportsbook</small>':'<strong>Odds unavailable</strong><small>Research threshold</small>';
   const evidence=p.last10?.games?'Historical over-line: '+statSummary(p.last10)+' · '+(Number.isFinite(p.average)?'Avg '+Number(p.average).toFixed(1):'No average'):(p.marketEvidence?.verified?'Independent team form: '+p.marketEvidence.evidence:'Market-implied share: '+(Number.isFinite(p.marketShare)?Math.round(p.marketShare*100)+'% (vig removed)':'Unavailable')+' · not an independently confirmed edge');
   return '<div class="cross-leg"><div class="cross-leg-side"><span class="cross-market">'+esc(p.marketLabel||'Market')+'</span><strong>'+esc(p.selection)+'</strong><span class="tiny">'+esc(p.gameLabel)+'</span><span class="cross-evidence">'+esc(evidence)+'</span></div><div class="cross-leg-quote">'+odds+'</div>'+(p.kind==='player'?propBreakdownMarkup(p):teamH2HMarkup(p))+'</div>';
 }
@@ -571,7 +530,7 @@ async function loadCrossGameParlay(s,date,refresh=false){
     if(!root.isConnected||sport!==s||tab!=='cross')return;
     root.innerHTML=publicSourceNotice(p)+renderCrossGame(p.crossGameParlay||null);bindPropBreakdowns(root);bindTeamH2Hs(root);
     const summary=document.getElementById('crosscoverage');
-    if(summary)summary.textContent=(p.crossGameParlay?.gameCount||0)+' upcoming games evaluated · '+(p.crossGameParlay?.consideredMarkets||0)+' eligible market candidates';
+    if(summary)summary.textContent=(p.crossGameParlay?.gameCount||0)+' games checked · '+(p.crossGameParlay?.consideredMarkets||0)+' possible picks';
   }catch(e){
     root.innerHTML='<div class="edge-card"><strong>Cross-game research unavailable</strong><p class="tiny">Could not verify current game markets.</p><button class="edge-retry">Try again</button></div>';
     root.querySelector('.edge-retry')?.addEventListener('click',()=>loadCrossGameParlay(s,date,true));
@@ -601,7 +560,7 @@ function propBreakdownMarkup(p){
       notice:'Green / red show whether the exact threshold was cleared in recorded games. No inferred outcomes or probabilities.'});
     attr=' data-free-id="'+esc(id)+'"';
   }
-  return '<details class="prop-breakdown"'+attr+' data-person="'+esc(person)+'" data-market="'+esc(stat)+'" data-line="'+esc(line)+'" data-side="'+esc(p.side||'Over')+'" data-opponent="'+esc(p.opponent||'')+'" data-opponent-id="'+esc(p.opponentId||'')+'" data-game-id="'+esc(p.gameId||'')+'" data-date="'+esc(p.date||iso(day()))+'"><summary><span class="prop-graph-label">▥ See last 5/10 games, past matchups and chart</span><span class="prop-graph-arrow">›</span></summary><div class="prop-breakdown-body"><p class="tiny">Open to load verified game logs and opponent stats…</p></div></details>';
+  return '<details class="prop-breakdown"'+attr+' data-person="'+esc(person)+'" data-market="'+esc(stat)+'" data-line="'+esc(line)+'" data-side="'+esc(p.side||'Over')+'" data-opponent="'+esc(p.opponent||'')+'" data-opponent-id="'+esc(p.opponentId||'')+'" data-game-id="'+esc(p.gameId||'')+'" data-date="'+esc(p.date||iso(day()))+'"><summary><span class="prop-graph-label">See last 5/10 games and matchups</span><span class="prop-graph-arrow">›</span></summary><div class="prop-breakdown-body"><p class="tiny">Open to load verified game logs and opponent stats…</p></div></details>';
 }
 function decimalStat(x){return Number.isFinite(Number(x))?Number(x).toFixed(1):'—'}
 function propBreakdownLineLabel(d){const n=Number(d.line),stat=d.stat;const name=niceMarket(stat);return (d.side==='under'?'Under ':'Over ')+n+' '+name}
@@ -627,14 +586,14 @@ function renderOpponentH2H(data){
 }
 function renderOpponentPosition(data){
   const a=data.positionAllowed||{},position=String(a.position||data.position||'');
-  if(!a.available)return'<section class="breakdown-section"><div class="breakdown-section-title"><strong>Opponent allowed to '+esc(position||'this position')+'</strong><small>Not verified</small></div><p class="tiny">'+esc(a.reason||'No eligible verified positional box-score data is available.')+'</p></section>';
+  if(!a.available)return'';
   const label=niceMarket(data.stat),rows=a.byGame||[],allowPct=Number.isFinite(a.playerHitRate)?Math.round(100*a.playerHitRate)+'%':'—';
   return '<section class="breakdown-section"><div class="breakdown-section-title"><strong>'+esc(a.opponent||data.selectedOpponent||'Opponent')+' vs '+esc(position)+'</strong><small>Last '+esc(a.games)+' completed game(s)</small></div><div class="position-allowed-stats"><div><span>Position total allowed / game</span><strong>'+esc(decimalStat(a.averageCombined))+'</strong><small>'+esc(label)+'</small></div><div><span>Per recorded player</span><strong>'+esc(decimalStat(a.averagePerPlayer))+'</strong><small>'+esc(label)+'</small></div><div><span>Players who cleared '+esc(data.line)+'</span><strong>'+esc(a.playerHits)+' / '+esc(a.playerAppearances)+'</strong><small>'+esc(allowPct)+' observed</small></div></div><details class="breakdown-opponent-games"><summary>View '+esc(a.games)+' opponent game(s)</summary>'+rows.slice().reverse().map(x=>'<div class="breakdown-listrow"><span>'+esc(new Date(x.date).toLocaleDateString('en-CA',{timeZone:'America/Toronto',month:'short',day:'numeric'}))+'</span><b>'+esc(decimalStat(x.total))+' '+esc(label)+'</b><span>'+esc(x.hits)+'/'+esc(x.players)+' cleared</span></div>').join('')+'</details><p class="tiny">These are combined stats allowed to all '+esc(position)+' players in each opponent game. This is not an individual player projection.</p></section>';
 }
 function renderPropBreakdown(data,container){
   const section=container.querySelector('.prop-breakdown-body');if(!section)return;
   const summary5=data.last5?.summary,summary10=data.last10?.summary;
-  section.innerHTML='<div class="prop-breakdown-top"><div><span class="eyebrow">Player research</span><strong>'+esc(data.player||'Player')+' · '+esc(propBreakdownLineLabel(data))+'</strong><span class="tiny">Recorded games only · '+esc(data.scope||'In-scope seasons')+'</span></div><div class="prop-mini-stat"><span>L5</span><b>'+esc(summary5?.hits??'—')+'/'+esc(summary5?.games??'—')+'</b><span>L10</span><b>'+esc(summary10?.hits??'—')+'/'+esc(summary10?.games??'—')+'</b></div></div><div class="prop-chart-switch"><button type="button" class="active" data-games="5">Last 5</button><button type="button" data-games="10">Last 10</button></div><div class="prop-chart-target"></div>'+renderOpponentH2H(data)+renderOpponentPosition(data)+(data.notes?.length?'<p class="tiny prop-data-notes">'+data.notes.map(esc).join(' · ')+'</p>':'')+'<p class="tiny prop-data-notes">'+esc(data.notice||'Historical data is descriptive; odds and outcomes are not guaranteed.')+'</p>';
+  section.innerHTML='<div class="prop-breakdown-top"><div><span class="eyebrow">Recent results</span><strong>'+esc(data.player||'Player')+' · '+esc(propBreakdownLineLabel(data))+'</strong><span class="tiny">Actual completed games</span></div><div class="prop-mini-stat"><span>L5</span><b>'+esc(summary5?.hits??'—')+'/'+esc(summary5?.games??'—')+'</b><span>L10</span><b>'+esc(summary10?.hits??'—')+'/'+esc(summary10?.games??'—')+'</b></div></div><div class="prop-chart-switch"><button type="button" class="active" data-games="5">Last 5</button><button type="button" data-games="10">Last 10</button></div><div class="prop-chart-target"></div>'+renderOpponentH2H(data)+renderOpponentPosition(data)+(data.notes?.length?'<p class="tiny prop-data-notes">'+data.notes.map(esc).join(' · ')+'</p>':'')+'<p class="tiny prop-data-notes">'+esc(data.notice||'Historical data is descriptive; odds and outcomes are not guaranteed.')+'</p>';
   const target=section.querySelector('.prop-chart-target');let windowSize=5;
   const draw=()=>{
     const block=windowSize===5?data.last5:data.last10;
@@ -686,8 +645,8 @@ function makeSGPCard(g,i){
   '<small>Check player availability and that your sportsbook accepts these legs together.</small></div></article>';
 }
 function publicSourceNotice(p){return '';}
-async function loadRankedSGPs(s,date,refresh=false){const box=document.getElementById('sgpmarket');if(!box)return;box.innerHTML='<div class="edge-skeleton">Evaluating shot volume, player hit rates and sportsbook markets…</div>';try{const p=await getRanked(s,date,refresh);if(!box.isConnected||tab!=='sgp'||sport!==s)return;const groups=p.sgps||[];box.innerHTML=groups.length?'<div class="edge-stack">'+groups.map((g,i)=>makeSGPCard(g,i)).join('')+'</div>':'<div class="edge-card"><strong>No 3-leg combination passes the current research filter.</strong><p class="tiny">There are '+esc(p.props?.length||0)+' individually researched player markets, but not enough stable, non-duplicated legs in one game. We will not fill empty positions with weak picks.</p><button type="button" class="edge-navigate" data-go="props">View top individual props →</button></div>';box.innerHTML=publicSourceNotice(p)+box.innerHTML;box.querySelectorAll('[data-go="props"]').forEach(b=>b.onclick=()=>{tab='props';render()});document.getElementById('sgpcoverage').textContent=groups.length+' researched combinations · '+esc(p.props?.length||0)+' qualifying individual prop trends';const crossPreview=document.getElementById('crosspreview');if(crossPreview){crossPreview.innerHTML=renderCrossGame(p.crossGameParlay||null,true);bindPropBreakdowns(crossPreview);bindTeamH2Hs(crossPreview)}bindPropBreakdowns(box)}catch(e){box.innerHTML='<div class="edge-card">SGP analysis could not load. <button class="edge-retry">Try again</button></div>';box.querySelector('.edge-retry')?.addEventListener('click',()=>loadRankedSGPs(s,date,true))}}
-async function loadRankedProps(s,date,refresh=false){const box=document.getElementById('rankedprops');if(!box)return;box.innerHTML='<div class="edge-skeleton">Checking posted over/under lines and recent-game hit rates…</div>';try{const p=await getRanked(s,date,refresh);if(!box.isConnected||tab!=='props'||sport!==s)return;const props=p.props||[];box.innerHTML=props.length?'<div class="edge-stack">'+props.map((x,i)=>makePropCard(x,i)).join('')+'</div>':'<div class="edge-card"><strong>No qualifying props for this slate.</strong><p class="tiny">Starting roles, verified lines or recent-game samples are insufficient. Check the additional market browser below for available prices, but do not treat them as model-approved picks.</p></div>';document.getElementById('propcoverage').textContent=props.length+' of 10 evidence-ranked research candidates · '+(p.pricedProps||0)+' with listed sportsbook odds';box.innerHTML=publicSourceNotice(p)+box.innerHTML;bindPropBreakdowns(box)}catch(e){box.innerHTML='<div class="edge-card">Player prop analysis could not load. <button class="edge-retry">Try again</button></div>';box.querySelector('.edge-retry')?.addEventListener('click',()=>loadRankedProps(s,date,true))}}
+async function loadRankedSGPs(s,date,refresh=false){const box=document.getElementById('sgpmarket');if(!box)return;box.innerHTML='<div class="edge-skeleton">Checking today’s game parlays…</div>';try{const p=await getRanked(s,date,refresh);if(!box.isConnected||tab!=='sgp'||sport!==s)return;const groups=p.sgps||[];box.innerHTML=groups.length?'<div class="edge-stack">'+groups.map((g,i)=>makeSGPCard(g,i)).join('')+'</div>':'<div class="edge-card"><strong>No 3-leg combination passes the current research filter.</strong><p class="tiny">There are '+esc(p.props?.length||0)+' individually researched player markets, but not enough stable, non-duplicated legs in one game. We will not fill empty positions with weak picks.</p><button type="button" class="edge-navigate" data-go="props">View top individual props →</button></div>';box.innerHTML=publicSourceNotice(p)+box.innerHTML;box.querySelectorAll('[data-go="props"]').forEach(b=>b.onclick=()=>{tab='props';render()});document.getElementById('sgpcoverage').textContent=groups.length+' game parlays · '+esc(p.props?.length||0)+' player picks reviewed';const crossPreview=document.getElementById('crosspreview');if(crossPreview){crossPreview.innerHTML=renderCrossGame(p.crossGameParlay||null,true);bindPropBreakdowns(crossPreview);bindTeamH2Hs(crossPreview)}bindPropBreakdowns(box)}catch(e){box.innerHTML='<div class="edge-card">SGP analysis could not load. <button class="edge-retry">Try again</button></div>';box.querySelector('.edge-retry')?.addEventListener('click',()=>loadRankedSGPs(s,date,true))}}
+async function loadRankedProps(s,date,refresh=false){const box=document.getElementById('rankedprops');if(!box)return;box.innerHTML='<div class="edge-skeleton">Checking today’s player picks…</div>';try{const p=await getRanked(s,date,refresh);if(!box.isConnected||tab!=='props'||sport!==s)return;const props=p.props||[];box.innerHTML=props.length?'<div class="edge-stack">'+props.map((x,i)=>makePropCard(x,i)).join('')+'</div>':'<div class="edge-card"><strong>No qualifying props for this slate.</strong><p class="tiny">Starting roles, verified lines or recent-game samples are insufficient. Check the additional market browser below for available prices, but do not treat them as model-approved picks.</p></div>';document.getElementById('propcoverage').textContent=props.length+' of 10 player picks · '+(p.pricedProps||0)+' with listed sportsbook odds';box.innerHTML=publicSourceNotice(p)+box.innerHTML;bindPropBreakdowns(box)}catch(e){box.innerHTML='<div class="edge-card">Player prop analysis could not load. <button class="edge-retry">Try again</button></div>';box.querySelector('.edge-retry')?.addEventListener('click',()=>loadRankedProps(s,date,true))}}
 async function loadGamePropSuggestions(card,s,date){const box=card.querySelector('.gameprops');if(!box)return;box.textContent='Loading available player shots and props…';try{const p=await getRanked(s,date);if(!box.isConnected)return;const h=cleanTeam(card.dataset.home),a=cleanTeam(card.dataset.away);const related=(p.candidateProps||p.props||[]).filter(x=>x.gameId===card.dataset.hawkGame||(cleanTeam(x.team)===h&&cleanTeam(x.opponent)===a)||(cleanTeam(x.team)===a&&cleanTeam(x.opponent)===h)).slice(0,5);if(related.length)box.innerHTML='<div class="panel-heading"><strong>Player prop opportunities</strong><small class="tiny">'+(s==='NHL'?'Shot volume first':'Observed game logs')+'</small></div>'+related.map(x=>'<div class="metric-pair"><span>'+esc(x.player)+' — '+esc(x.selection)+'</span><b>'+esc(statSummary(x.last10))+'</b></div>').join('')+'<p class="tiny">Past hit rates are descriptive. Go to Top 10 Props for lines, prices and complete evidence.</p>';else box.innerHTML='<strong>Player props</strong><p class="tiny">No qualifying, game-matched player prop research is available here yet. This is not a recommendation for the moneyline alone.</p>'}catch(e){box.innerHTML='<strong>Player research temporarily unavailable.</strong>'}}
 
 const researchMarkets={NHL:[['sog','Shots on goal'],['pts','Points'],['goals','Goals'],['assists','Assists'],['blocks','Blocked shots']],NFL:[['rec','Receptions'],['receiving.yards','Receiving yards'],['rushing.yards','Rushing yards'],['passing.yards','Passing yards'],['targets','Targets'],['rushing.att','Rushing attempts'],['passing.att','Passing attempts']],MLB:[['pitching.so','Pitcher Ks'],['outs','Pitcher outs'],['pitching.bb','Pitcher walks'],['pitching.h','Pitcher hits allowed'],['er','Earned runs'],['batting.h','Batter hits'],['total_bases','Total bases']]};
