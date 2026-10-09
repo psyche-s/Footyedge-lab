@@ -81,7 +81,6 @@ def train(df,season,cutoff,min_games=24):
     ordered=[str(g) for g in games.game_id if str(g) in set(gid)]
     if len(set(ordered))<min_games or len(y)<50:
         raise ValueError('Insufficient valid games for reliable RAPM training')
-    X=DictVectorizer(sparse=True).fit_transform(rows)
     vec=DictVectorizer(sparse=True)
     X=vec.fit_transform(rows);y=np.asarray(y);w=np.asarray(w);gid=np.asarray(gid)
     n_splits=min(4,max(2,len(ordered)//8))
