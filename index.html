@@ -318,6 +318,10 @@ body{background:#0d0e10}
 .nhl-shot-context span{color:#bdccd0}
 .nhl-shot-context small{color:#a3b1bb;font-size:10px;line-height:1.45}
 
+
+.pick-matchup{font-size:11px;line-height:1.55;color:#ceded4;background:rgba(135,174,148,.075);border-left:2px solid rgba(155,215,176,.55);border-radius:4px;padding:9px 11px;margin:9px 0}
+.pick-matchup small{display:block;font-size:10px;color:#a9b5b2;margin-top:4px}
+
 </style></head>
 <body><header class="head"><div class="headin wrap"><div><div class="brand">Sports<em>Lab</em></div><div class="subbrand">Sports intelligence</div></div><span class="status">● &nbsp; FREE DATA</span></div></header>
 <main class="wrap"><div class="sportbar" id="sports"><button class="sport active" data-s="NHL"><span class="emoji">🏒</span>NHL</button><button class="sport" data-s="NFL"><span class="emoji">🏈</span>NFL</button><button class="sport" data-s="MLB"><span class="emoji">⚾</span>MLB</button></div>
@@ -415,38 +419,31 @@ function pickSafetyNote(p){
 }
 
 
+
 function nhlOpponentShotContext(p){
  const x=p.opponentPossession,market=String(p.market||p.stat||'').toLowerCase();
  if(String(p.league||'').toLowerCase()!=='nhl'||!['sog','shots'].includes(market)||!x?.verified)return'';
- const fmt=n=>typeof n==='number'&&Number.isFinite(n)?n.toFixed(1):'—';
- return'<div class="nhl-shot-context"><strong>Opponent shot environment</strong><span>'+esc(p.opponent||x.team)+' has allowed '+esc(fmt(x.sogAgainstPerGame))+' shots on goal per game at <b>5-on-5</b> over '+esc(x.games)+' verified games.</span><small>Team-level shots, not shots allowed to this player’s exact position. '+(x.currentSeasonGames<5?'Small early-season sample; interpret cautiously.':'')+' Power-play chances are excluded from this figure.</small></div>';
+ // A preseason or last-year-only figure belongs in research, not the main recommendation.
+ if(Number(x.currentSeasonGames)<3||!Number.isFinite(x.sogAgainstPerGame))return'';
+ return'<p class="pick-matchup">Matchup: '+esc(p.opponent||x.team)+' has allowed '+esc(x.sogAgainstPerGame.toFixed(1))+' shots per game at 5-on-5 over its last '+esc(x.games)+' games.</p>';
 }
-
 function nhlPositionMatchup(p){
  if(String(p?.league||'').toLowerCase()!=='nhl'||String(p.market||p.stat||'').toLowerCase()!=='goals')return'';
- const table=p.opponentPositionTable,side=p.positionMatchup;
- if(!table?.available||!side?.verified)return'';
- const fmt=x=>typeof x==='number'&&Number.isFinite(x)?x.toFixed(2):'—';
- const fresh=Number(table.currentSeasonGames)||0,n=Number(table.games)||0,
-       historical=Math.max(0,n-fresh),tiny=fresh<5;
- const headline='<div class="pos-match-summary"><span>'+esc(p.opponent||table.team)+' allows <strong>'+esc(fmt(side.gaPerGame))+' goals/game</strong> to '+esc(side.position)+' scorers</span><small>'+esc(side.goalsAllowed)+' goals in '+esc(n)+' completed games · '+esc(fresh)+' this season</small></div>';
- const rows=['C','LW','RW','D'].map(pos=>{
-  const v=table.positions?.[pos],isPlayer=pos===side.position;
-  return '<tr'+(isPlayer?' class="pos-player-row"':'')+'><td>'+esc(pos)+(isPlayer?' <small>player role</small>':'')+'</td><td>'+esc(v?.goalsAllowed??'—')+'</td><td>'+esc(typeof v?.gaPerGame==='number'?fmt(v.gaPerGame):'—')+'</td></tr>';
- }).join('');
- const details='<details class="pos-match-details"><summary>See all positions (C / LW / RW / D)</summary>'+
- '<div class="pos-match-inner"><table><thead><tr><th>Opp. scorer</th><th>GA</th><th>GA/game</th></tr></thead><tbody>'+rows+'</tbody></table>'+
- '<p class="tiny">Official previous NHL full-game scorer boxscores · '+esc(n)+' games ('+esc(fresh)+' current season, '+esc(historical)+' previous). Goal totals can include power-play and overtime scoring. These are total goals from that position, <strong>not per-player success rates</strong>.</p>'+
- (tiny?'<p class="tiny">Small current-season sample: do not label a positional matchup “elite” or assume this guarantees a goalscorer.</p>':'')+
- '</div></details>';
- return'<div class="pos-match-card">'+headline+details+'</div>';
+ const data=p.positionMatchup;
+ if(!data?.verified||!Number.isFinite(data.gaPerGame)||Number(data.currentSeasonGames)<3)return'';
+ const names={C:'centers',LW:'left wings',RW:'right wings',D:'defensemen'};
+ const role=names[data.position]||'players in his position';
+ return'<p class="pick-matchup">Matchup: '+esc(p.opponent||data.opponent)+' has allowed '+esc(data.goalsAllowed)+' goals to '+esc(role)+' in '+esc(data.games)+' recent games. <small>Team total for that position, not individual odds.</small></p>';
 }
+
+
 function visibleFormAndH2H(p){
- const h=p.h2h?.summary,
- h2h=Number.isFinite(h?.games)&&h.games>0?esc(h.hits)+'/'+esc(h.games)+' in prior meetings':'No verified H2H sample',
- trend=String(p.form?.read||'').trim(),
- cleanTrend=/improving/i.test(trend)?'Improving':/cooling/i.test(trend)?'Cooling':/stable/i.test(trend)?'Stable':'Insufficient sample';
- return'<div class="form-h2h-line"><span><b>Recent form:</b> '+esc(cleanTrend)+'</span><span><b>Against opponent:</b> '+h2h+'</span></div>';
+ const h=p.h2h?.summary,trend=String(p.form?.read||'').trim(),
+       hit=Number.isFinite(h?.games)&&h.games>0&&Number.isFinite(h.hits),
+       form=/improving/i.test(trend)?'Improving':/cooling/i.test(trend)?'Cooling':'';
+ if(!hit&&!form)return'';
+ return'<div class="form-h2h-line">'+(form?'<span><b>Recent form:</b> '+esc(form)+'</span>':'')+
+   (hit?'<span><b>Against this opponent:</b> '+esc(h.hits)+' of '+esc(h.games)+' games</span>':'')+'</div>';
 }
 
 function plainWhyMarkup(p,scoring=false){
@@ -583,10 +580,10 @@ function crossGameSelection(p){
 }
 function renderCrossGame(c,compact=false){
   if(!c?.available||!(c.legs||[]).length){
-    return '<div class="edge-card cross-card"><div class="eyebrow">1 best cross-game parlay</div><h3>No parlay stands out today</h3><p class="tiny">'+esc(c?.reason||'There are not enough strong picks from different games.')+'</p><p class="tiny">Not enough strong picks across different games. Nothing is forced.</p></div>';
+    return '<div class="edge-card cross-card"><div class="eyebrow">Best cross-game parlay</div><h3>No strong parlay today</h3><p class="tiny">There aren’t enough reliable selections from different games. Nothing is forced.</p></div>';
   }
   const quoted=Number(c.verifiedLegs||0),total=c.legCount||c.legs.length;
-  const estimated=c.estimatedPrice&&quoted===total?'<div class="cross-estimate"><span>Illustrative arithmetic if all individual prices remain available</span><strong>'+esc(c.estimatedPrice)+'</strong><small>Check combined odds at your sportsbook</small></div>':'<div class="cross-estimate"><span>Combined sportsbook odds</span><strong>Not verified</strong><small>'+quoted+' of '+total+' selections have sportsbook-specific prices</small></div>';
+  const estimated=c.estimatedPrice&&quoted===total?'<div class="cross-estimate"><span>Estimated combined odds</span><strong>'+esc(c.estimatedPrice)+'</strong><small>Confirm final price with your sportsbook</small></div>':'<div class="cross-estimate"><span>Combined odds</span><strong>Check sportsbook</strong></div>';
   return '<article class="edge-card cross-card"><div class="edge-cardtop"><div class="edge-rank">★</div><div class="edge-player"><strong>Best cross-game parlay</strong><span class="edge-vs">'+esc(total)+' different games · '+esc(c.league?.toUpperCase()||sport)+' · '+esc(c.date||iso(day()))+'</span></div><span class="edge-status">'+esc(quoted===total?'All legs individually priced':'Odds to check')+'</span></div><div class="cross-lines">'+c.legs.map(crossGameSelection).join('')+'</div>'+estimated+'<details class="edge-details"><summary>Why these picks?</summary><p>'+esc(c.explanation||'These selections had the strongest available form and matchups.')+'</p><p>Check the prices, lineup and combined parlay at your sportsbook before playing.</p></details></article>';
 }
 async function loadCrossGameParlay(s,date,refresh=false){
@@ -597,7 +594,7 @@ async function loadCrossGameParlay(s,date,refresh=false){
     if(!root.isConnected||sport!==s||tab!=='cross')return;
     root.innerHTML=publicSourceNotice(p)+renderCrossGame(p.crossGameParlay||null);bindPropBreakdowns(root);bindTeamH2Hs(root);
     const summary=document.getElementById('crosscoverage');
-    if(summary)summary.textContent=(p.crossGameParlay?.gameCount||0)+' games checked · '+(p.crossGameParlay?.consideredMarkets||0)+' possible picks';
+    if(summary)summary.textContent=(p.crossGameParlay?.gameCount||0)+' games reviewed';
   }catch(e){
     root.innerHTML='<div class="edge-card"><strong>Cross-game research unavailable</strong><p class="tiny">Could not verify current game markets.</p><button class="edge-retry">Try again</button></div>';
     root.querySelector('.edge-retry')?.addEventListener('click',()=>loadCrossGameParlay(s,date,true));
