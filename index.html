@@ -371,8 +371,8 @@ function shortOddsNote(x){return x.priced?'Exact listed quote; check freshness b
 function nhlUsageMarkup(p){
   const u=p?.usage;
   if(!u?.verified)return'';
-  const fmt=x=>Number.isFinite(Number(x))?Number(x).toFixed(1):'—';
-  const shot=Number.isFinite(Number(u.shotsPer60))?fmt(u.shotsPer60)+' shots/60':'Not available';
+  const fmt=x=>x!=null&&Number.isFinite(Number(x))?Number(x).toFixed(1):'—';
+  const shot=u.shotsPer60!=null&&Number.isFinite(Number(u.shotsPer60))?fmt(u.shotsPer60)+' shots/60':'Not available';
   const points=Number.isInteger(u.powerPlayPointsLast10)?String(u.powerPlayPointsLast10):'—';
   const early=(u.currentSeasonGames||0)<5;
   return '<div class="nhl-usage"><strong>Verified NHL opportunity · L'+esc(u.games)+'</strong>'+
