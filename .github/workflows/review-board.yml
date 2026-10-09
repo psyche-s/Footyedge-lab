@@ -1,0 +1,92 @@
+name: Grade SportsLab Frozen Picks (No Vercel Build)
+
+on:
+  workflow_dispatch:
+    inputs:
+      league:
+        description: Sport to review from its pregame frozen snapshot
+        type: choice
+        required: true
+        options: [all, nhl, nfl, mlb]
+        default: all
+      date:
+        description: Date YYYY-MM-DD (blank means yesterday in Toronto)
+        required: false
+        type: string
+  schedule:
+    - cron: '20 13,14 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sportslab-review
+  cancel-in-progress: false
+
+jobs:
+  grade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Confirm 9 AM Toronto review time
+        id: window
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ] || [ "$(TZ=America/Toronto date +%H)" = "09" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.window.outputs.allowed == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.window.outputs.allowed == 'true'
+        with:
+          node-version: '22'
+      - name: Grade original frozen board against official finals
+        if: steps.window.outputs.allowed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          INPUT_LEAGUE: ${{ inputs.league || 'all' }}
+          INPUT_DATE: ${{ inputs.date || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p frozen reviewed
+          if [ -n "$INPUT_DATE" ]; then
+            date="$INPUT_DATE"
+          else
+            date="$(TZ=America/Toronto date -d 'yesterday' +%Y-%m-%d)"
+          fi
+          [[ "$date" =~ ^20[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]] || { echo "::error::Invalid date"; exit 1; }
+          for sport in nhl nfl mlb; do
+            if [ "$INPUT_LEAGUE" != "all" ] && [ "$INPUT_LEAGUE" != "$sport" ]; then
+              continue
+            fi
+            tag="sportslab-freeze-${sport}-${date}"
+            if ! gh release view "$tag" --repo "$GH_REPO" --json body -q .body > "frozen/${sport}.json"; then
+              echo "No original pregame freeze for ${sport} on ${date}; cannot invent a pick history"
+              rm -f "frozen/${sport}.json"
+              continue
+            fi
+            if node scripts/review-board.js --league="$sport" --date="$date" --snapshot="frozen/${sport}.json"; then
+              published="sportslab-review-${sport}-${date}"
+              latest="sportslab-review-latest-${sport}"
+              for tag in "$published" "$latest"; do
+                if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
+                  gh release edit "$tag" --repo "$GH_REPO" --notes-file "reviewed/${sport}.json"
+                else
+                  upper="$(printf '%s' "$sport" | tr '[:lower:]' '[:upper:]')"
+                  gh release create "$tag" --repo "$GH_REPO" --target main --title "SportsLab graded $upper $date" --notes-file "reviewed/${sport}.json" --latest=false
+                fi
+              done
+              echo "Graded ${sport} from frozen pregame picks"
+            else
+              echo "No graded data published for ${sport}; previous reviews unchanged"
+            fi
+          done
+          if ! find reviewed -maxdepth 1 -name '*.json' | grep -q .; then
+            echo "::notice::No frozen picks available for grading. Historical claims were withheld."
+          fi
