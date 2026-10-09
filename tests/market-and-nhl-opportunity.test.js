@@ -32,7 +32,7 @@ test('Mismatched markets, alternate lines and 3-way outcomes fail arb check',()=
  const a={...scope,subjectId:'WSH',line:-1.5,odds:150,book:'DraftKings'};
  assert.equal(M.arbitrage(a,{...a,subjectId:'NYR',line:2.5,book:'FanDuel',odds:160}).available,false);
  assert.equal(M.arbitrage(a,{...a,subjectId:'NYR',line:1.5,book:'FanDuel',odds:160,period:'regulation'}).available,false);
- const ml={...scope,market:'h2h',subjectId:'WSH',odds:190};
+ const ml={...scope,market:'h2h',settlement:'regulation_3way',subjectId:'WSH',odds:190};
  assert.equal(M.arbitrage(ml,{...ml,subjectId:'NYR',book:'FanDuel'},100).available,false);
 });
 test('Price movement must compare same book, same line, ordered timestamps',()=>{
