@@ -1,1 +1,2 @@
 Friday NHL early refresh request — 2026-10-09. Run research and publish 2026-10-09 NHL slate immediately using public-source fallback. Preserve scheduled 4:00 PM ET refresh and official freeze. This trigger contains no picks, odds or invented data.
+Retry: 2026-10-09 02:14 ET; fixed compact publication snapshot so full player charts fit within GitHub release notes. Run again immediately. 4 PM publication remains scheduled.
