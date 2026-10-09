@@ -18,6 +18,9 @@ function compactPossession(p){
 }
 function compactPick(p){
  const q={...p};
+ // Drop verbose repeated backend source warnings. The actual pick, form,
+ // matchup, H2H game logs and source-qualified metrics stay intact.
+ delete q.sampleNote;
  if(q.teamPossession)q.teamPossession=compactPossession(q.teamPossession);
  if(q.opponentPossession)q.opponentPossession=compactPossession(q.opponentPossession);
  if(String(q.market||q.stat||'')!=='goals'){delete q.positionMatchup;delete q.opponentPositionTable;}
