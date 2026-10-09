@@ -380,7 +380,7 @@ function plainWhy(p,scoring=false){
   const h=p.h2h?.summary;
   if(why.length<3&&cleanHit(h))
     why.push('Against this opponent, it landed '+h.hits+' out of '+h.games+' times.');
-  if(why.length<3&&isNHL&&scoring&&p.positionMatchup?.verified&&p.positionMatchup.games>=3)
+  if(why.length<3&&isNHL&&scoring&&String(p.market||'')==='goals'&&p.positionMatchup?.verified&&p.positionMatchup.games>=3)
     why.push('In '+p.positionMatchup.games+' completed games, the opponent allowed '+p.positionMatchup.goalsAllowed+' goals to players at his position; this sample is too small to establish a reliable future rate.');
   if(why.length<3&&isNHL&&p.usage?.verified&&p.usage.currentSeasonGames>=5&&
       Number.isFinite(p.usage.toiChangeMinutes)&&Math.abs(p.usage.toiChangeMinutes)>=1.5)
@@ -409,7 +409,7 @@ function pickSafetyNote(p){
 }
 
 function nhlPositionMatchup(p){
- if(String(p?.league||'').toLowerCase()!=='nhl')return'';
+ if(String(p?.league||'').toLowerCase()!=='nhl'||String(p.market||p.stat||'').toLowerCase()!=='goals')return'';
  const table=p.opponentPositionTable,side=p.positionMatchup;
  if(!table?.available||!side?.verified)return'';
  const fmt=x=>typeof x==='number'&&Number.isFinite(x)?x.toFixed(2):'—';
