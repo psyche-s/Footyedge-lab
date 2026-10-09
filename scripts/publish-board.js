@@ -20,6 +20,7 @@ function compactPick(p){
  const q={...p};
  if(q.teamPossession)q.teamPossession=compactPossession(q.teamPossession);
  if(q.opponentPossession)q.opponentPossession=compactPossession(q.opponentPossession);
+ if(q.opponentPositionTable?.available){const p=q.opponentPositionTable;q.opponentPositionTable={available:true,source:p.source,team:p.team,games:p.games,currentSeasonGames:p.currentSeasonGames,priorSeasonGames:p.priorSeasonGames,hasReliableCurrentSeasonSample:p.hasReliableCurrentSeasonSample,positions:p.positions};}
  return q;
 }
 function compactLeg(p){
