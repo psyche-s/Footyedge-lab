@@ -61,3 +61,31 @@ test('Unknown NHL shooting team or missing coordinates are never fabricated',()=
  const s=P.toEvent({typeDescKey:'missed-shot',situationCode:'1551',periodDescriptor:{periodType:'REG',number:1},details:{eventOwnerTeamId:6}},6,3);
  assert.equal(s.locationKnown,false);assert.equal(s.innerSlotProxy,false);
 });
+
+test('Official collector deduplicates shared games across both team schedules',async()=>{
+ const C=require('../lib/free-core'),original=C.getJSON;
+ const match=game(2025020021,'2026-10-08');
+ C.getJSON=async url=>{
+  if(url.includes('/club-schedule-season/'))return{games:[{id:match.id,gameDate:match.gameDate,gameState:'OFF',gameType:2}]};
+  if(url.includes('/gamecenter/'+match.id+'/play-by-play'))return match;
+  throw Error('Unexpected test URL '+url);
+ };
+ try{
+  const x=await P.collect(['BOS','NYR'],'2026-10-09');
+  assert.equal(x.gamesRequested,1);
+  assert.equal(x.gamesVerified,1);
+  assert.equal(x.teams.BOS.verified,true);
+  assert.equal(x.teams.NYR.verified,true);
+  assert.equal(x.teams.BOS.corsiPct+x.teams.NYR.corsiPct,1);
+ }finally{C.getJSON=original}
+});
+test('Official collector degrades gracefully when every source is unavailable',async()=>{
+ const C=require('../lib/free-core'),original=C.getJSON;
+ C.getJSON=async()=>{throw Error('Simulated NHL outage')};
+ try{
+  const x=await P.collect(['BOS'],'2026-10-09');
+  assert.equal(x.gamesRequested,0);
+  assert.equal(x.teams.BOS.verified,false);
+  assert.equal(x.teams.BOS.rapm,undefined); // no manufactured coefficient data
+ }finally{C.getJSON=original}
+});
