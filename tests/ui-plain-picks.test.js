@@ -85,10 +85,9 @@ test('Shots card keeps 5v5 team possession distinct from per-position props',()=
  const p={...pick,opponentPossession:{verified:true,team:'SEA',games:3,currentSeasonGames:2,
   sogAgainstPerGame:18,corsiPct:.53,fenwickPct:.50}};
  const h=app.makePropCard(p,0);
- assert.ok(h.includes('Opponent shot environment'));
- assert.ok(h.includes('18.0 shots on goal per game'));
- assert.ok(h.includes('3 verified games'));
- assert.ok(h.includes('not shots allowed to this player'));
+ assert.ok(h.includes('18.0 total shots per game'));
+ assert.ok(h.includes('3 games'));
+ assert.ok(h.includes('Not a position-specific figure'));
  assert.ok(!h.includes('RAPM'));
 });
 test('Goalscorer card contains source-qualified C/LW/RW/D table without elite label',()=>{
@@ -96,13 +95,12 @@ test('Goalscorer card contains source-qualified C/LW/RW/D table without elite la
   positions:{C:{goalsAllowed:6,gaPerGame:2,games:3},LW:{goalsAllowed:1,gaPerGame:1/3,games:3},
    RW:{goalsAllowed:0,gaPerGame:0,games:3},D:{goalsAllowed:1,gaPerGame:1/3,games:3}}};
  const p={...pick,market:'goals',selection:'Anytime goalscorer',line:.5,
-  position:'C',positionMatchup:{verified:true,position:'C',goalsAllowed:6,games:3,gaPerGame:2},
+  position:'C',positionMatchup:{verified:true,position:'C',goalsAllowed:6,games:3,gaPerGame:2,currentSeasonGames:3},
   opponentPositionTable:tbl};
  const h=app.scoringPickCard(p,0);
- assert.ok(h.includes('2.00 goals/game'));
- assert.ok(h.includes('See all positions'));
- assert.ok(h.includes('Small current-season sample'));
- assert.ok(h.includes('Goals allowed')||h.includes('goals/game'));
+ assert.ok(h.includes('allowed 6 goals to centers in 3 recent games'));
+ assert.ok(h.includes('Team total for that position'));
+ assert.ok(!h.includes('2.00 individual goals'));
  assert.ok(!h.includes('ELITE'));
 });
 
