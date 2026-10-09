@@ -293,6 +293,25 @@ body{background:#0d0e10}
 .edge-leg .prop-breakdown{margin-top:7px}
 
 .owner-research{font:700 12px inherit;border:0;background:rgba(167,177,190,.09);color:#d6e2da;border-radius:8px;padding:9px;cursor:pointer;text-align:left;width:100%}
+
+.form-h2h-line{display:flex;flex-wrap:wrap;justify-content:space-between;gap:7px 13px;font-size:11px;line-height:1.4;color:#abb7c0;margin:10px 0}
+.form-h2h-line b{color:#d6e0e4}
+.pos-match-card{margin:11px 0;border:1px solid rgba(159,177,189,.20);border-radius:10px;overflow:hidden;background:rgba(157,175,191,.055)}
+.pos-match-summary{display:flex;flex-direction:column;gap:4px;padding:11px 12px;font-size:11px;line-height:1.5;color:#c2d0d4}
+.pos-match-summary strong{color:#aad8bb}
+.pos-match-summary small{color:#97a8b2;font-size:10px}
+.pos-match-details{border-top:1px solid rgba(164,185,197,.15)}
+.pos-match-details>summary{font-size:10px;font-weight:700;cursor:pointer;padding:10px 12px;color:#a6bfcc}
+.pos-match-inner{padding:0 12px 12px}
+.pos-match-inner table{width:100%;border-collapse:collapse;font-size:11px}
+.pos-match-inner th{text-align:left;color:#9baeb8;font-weight:600;padding:9px;border-bottom:1px solid #39424d}
+.pos-match-inner td{padding:10px 9px;border-bottom:1px solid #303844;color:#ced6dc}
+.pos-match-inner th:not(:first-child),.pos-match-inner td:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
+.pos-player-row{background:rgba(140,191,158,.12)}
+.pos-player-row td:first-child{color:#b6dec1;font-weight:800}
+.pos-player-row small{font-weight:400;font-size:9px;color:#9db1a5}
+.pos-match-inner .tiny{font-size:10px;line-height:1.55;margin-top:10px;color:#a7b5bd}
+
 </style></head>
 <body><header class="head"><div class="headin wrap"><div><div class="brand">Sports<em>Lab</em></div><div class="subbrand">Sports intelligence</div></div><span class="status">● &nbsp; FREE DATA</span></div></header>
 <main class="wrap"><div class="sportbar" id="sports"><button class="sport active" data-s="NHL"><span class="emoji">🏒</span>NHL</button><button class="sport" data-s="NFL"><span class="emoji">🏈</span>NFL</button><button class="sport" data-s="MLB"><span class="emoji">⚾</span>MLB</button></div>
@@ -361,6 +380,8 @@ function plainWhy(p,scoring=false){
   const h=p.h2h?.summary;
   if(why.length<3&&cleanHit(h))
     why.push('Against this opponent, it landed '+h.hits+' out of '+h.games+' times.');
+  if(why.length<3&&isNHL&&scoring&&p.positionMatchup?.verified&&p.positionMatchup.games>=3)
+    why.push('In '+p.positionMatchup.games+' completed games, the opponent allowed '+p.positionMatchup.goalsAllowed+' goals to players at his position; this sample is too small to establish a reliable future rate.');
   if(why.length<3&&isNHL&&p.usage?.verified&&p.usage.currentSeasonGames>=5&&
       Number.isFinite(p.usage.toiChangeMinutes)&&Math.abs(p.usage.toiChangeMinutes)>=1.5)
     why.push('His playing time has '+(p.usage.toiChangeMinutes>0?'increased':'dropped')+' recently.');
@@ -386,6 +407,34 @@ function pickSafetyNote(p){
   ['goals','assists','pts'].includes(String(p.market||'')))note='Check tonight’s line and power-play role.';
  return note?'<p class="plain-risk">'+esc(note)+'</p>':'';
 }
+
+function nhlPositionMatchup(p){
+ if(String(p?.league||'').toLowerCase()!=='nhl')return'';
+ const table=p.opponentPositionTable,side=p.positionMatchup;
+ if(!table?.available||!side?.verified)return'';
+ const fmt=x=>typeof x==='number'&&Number.isFinite(x)?x.toFixed(2):'—';
+ const fresh=Number(table.currentSeasonGames)||0,n=Number(table.games)||0,
+       historical=Math.max(0,n-fresh),tiny=fresh<5;
+ const headline='<div class="pos-match-summary"><span>'+esc(p.opponent||table.team)+' allows <strong>'+esc(fmt(side.gaPerGame))+' goals/game</strong> to '+esc(side.position)+' scorers</span><small>'+esc(side.goalsAllowed)+' goals in '+esc(n)+' completed games · '+esc(fresh)+' this season</small></div>';
+ const rows=['C','LW','RW','D'].map(pos=>{
+  const v=table.positions?.[pos],isPlayer=pos===side.position;
+  return '<tr'+(isPlayer?' class="pos-player-row"':'')+'><td>'+esc(pos)+(isPlayer?' <small>player role</small>':'')+'</td><td>'+esc(v?.goalsAllowed??'—')+'</td><td>'+esc(typeof v?.gaPerGame==='number'?fmt(v.gaPerGame):'—')+'</td></tr>';
+ }).join('');
+ const details='<details class="pos-match-details"><summary>See all positions (C / LW / RW / D)</summary>'+
+ '<div class="pos-match-inner"><table><thead><tr><th>Opp. scorer</th><th>GA</th><th>GA/game</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+ '<p class="tiny">Official previous NHL full-game scorer boxscores · '+esc(n)+' games ('+esc(fresh)+' current season, '+esc(historical)+' previous). Goal totals can include power-play and overtime scoring. These are total goals from that position, <strong>not per-player success rates</strong>.</p>'+
+ (tiny?'<p class="tiny">Small current-season sample: do not label a positional matchup “elite” or assume this guarantees a goalscorer.</p>':'')+
+ '</div></details>';
+ return'<div class="pos-match-card">'+headline+details+'</div>';
+}
+function visibleFormAndH2H(p){
+ const h=p.h2h?.summary,
+ h2h=Number.isFinite(h?.games)&&h.games>0?esc(h.hits)+'/'+esc(h.games)+' in prior meetings':'No verified H2H sample',
+ trend=String(p.form?.read||'').trim(),
+ cleanTrend=/improving/i.test(trend)?'Improving':/cooling/i.test(trend)?'Cooling':/stable/i.test(trend)?'Stable':'Insufficient sample';
+ return'<div class="form-h2h-line"><span><b>Recent form:</b> '+esc(cleanTrend)+'</span><span><b>Against opponent:</b> '+h2h+'</span></div>';
+}
+
 function plainWhyMarkup(p,scoring=false){
  return '<div class="plain-why"><strong>Why this pick?</strong><p>'+esc(plainWhy(p,scoring))+'</p></div>'+pickSafetyNote(p);
 }
@@ -394,7 +443,7 @@ function scoringPickCard(p,i){
  return '<article class="edge-card scorer-card"><div class="edge-cardtop"><div class="edge-rank">'+esc(i+1)+'</div><div class="edge-player"><strong>'+esc(p.player)+'</strong><span class="edge-vs">'+esc(p.team||'')+' vs '+esc(p.opponent||'')+'</span></div>'+priceTag(p)+'</div>'+
  '<div class="edge-selection">'+esc(p.selection)+'</div>'+
  '<div class="scorer-trend">'+[['Last 5',p.last5],['Last 10',p.last10],['Season',p.season]].map(([title,data])=>'<span><b>'+esc(title)+'</b>'+esc(statSummary(data))+'</span>').join('')+'</div>'+
- plainWhyMarkup(p,true)+propBreakdownMarkup(p)+'</article>';
+ plainWhyMarkup(p,true)+visibleFormAndH2H(p)+nhlPositionMatchup(p)+propBreakdownMarkup(p)+'</article>';
 }
 async function loadScoringBoard(selectedSport,date,refresh=false){
   const box=document.getElementById('scorerboard');if(!box)return;
@@ -466,7 +515,7 @@ function makePropCard(p,i){
  return '<article class="edge-card prop-result"><div class="edge-cardtop"><div class="edge-rank">'+(i+1)+'</div><div class="edge-player"><strong>'+esc(p.player)+'</strong><span class="edge-vs">'+esc(p.game||[p.team,p.opponent].filter(Boolean).join(' vs '))+'</span></div>'+priceTag(p)+'</div>'+
  '<div class="edge-selection">'+esc(p.selection)+'</div>'+
  '<div class="edge-stats"><span><b>Last 5</b>'+esc(statSummary(p.last5))+'</span><span><b>Last 10</b>'+esc(statSummary(p.last10))+'</span><span><b>Average</b>'+esc(Number.isFinite(p.average)?Number(p.average).toFixed(1):'—')+'</span></div>'+
- plainWhyMarkup(p)+propBreakdownMarkup(p)+'</article>';
+ plainWhyMarkup(p)+visibleFormAndH2H(p)+nhlPositionMatchup(p)+propBreakdownMarkup(p)+'</article>';
 }
 
 function teamH2HMarkup(p){
