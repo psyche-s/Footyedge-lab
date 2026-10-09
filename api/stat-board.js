@@ -65,6 +65,68 @@ function findBookQuote(side,baseLine){
 }
 function marketKindLabel(market){return market==='h2h'?'Moneyline':market==='spreads'?'Spread':market==='totals'?'Game total':market==='team_total'?'Team total':market}
 function gameRef(away,home){return [marketKey(away),marketKey(home)].join(':')}
+
+/**
+ * Independent, pregame team evidence for aggregate ML/spread/total prices.
+ * Market-implied odds alone are never sufficient proof of a betting edge.
+ */
+async function teamFormForGames(league,date){
+  const sport={nhl:'hockey/nhl',nfl:'football/nfl',mlb:'baseball/mlb'}[league];
+  if(!sport)return new Map();
+  const back=league==='nfl'?40:league==='mlb'?23:26;
+  const start=new Date(date+'T12:00:00Z');start.setUTCDate(start.getUTCDate()-back);
+  const isoStart=start.toISOString().slice(0,10).replace(/-/g,''),isoEnd=date.replace(/-/g,'');
+  const u='https://site.api.espn.com/apis/site/v2/sports/'+sport+'/scoreboard?dates='+isoStart+'-'+isoEnd+'&limit=250';
+  const r=await fetch(u,{headers:{Accept:'application/json','User-Agent':'SportsLab-Research'},signal:AbortSignal.timeout(7000)});
+  if(!r.ok)throw Error('Team form source HTTP '+r.status);
+  const payload=await r.json(),data=new Map();
+  for(const game of payload.events||[]){
+    if(!game.status?.type?.completed||!game.date||etDate(game.date)>=date)continue;
+    const c=game.competitions?.[0]||{},h=c.competitors?.find(x=>x.homeAway==='home'),a=c.competitors?.find(x=>x.homeAway==='away');
+    if(!h||!a)continue;
+    const hs=Number(h.score),as=Number(a.score);
+    if(!Number.isFinite(hs)||!Number.isFinite(as))continue;
+    const home=h.team?.displayName||h.team?.name,away=a.team?.displayName||a.team?.name;
+    for(const[team,forGoals,againstGoals]of [[home,hs,as],[away,as,hs]]){
+      const id=marketKey(team);if(!id)continue;
+      if(!data.has(id))data.set(id,[]);
+      data.get(id).push({date:game.date,for:forGoals,against:againstGoals,margin:forGoals-againstGoals,total:forGoals+againstGoals,win:forGoals>againstGoals});
+    }
+  }
+  const grouped=new Map();
+  for(const[id,entries]of data){
+    const recent=entries.sort((a,b)=>Date.parse(b.date)-Date.parse(a.date)).slice(0,5);
+    if(recent.length<3)continue;
+    const avg=key=>recent.reduce((a,x)=>a+x[key],0)/recent.length;
+    grouped.set(id,{games:recent.length,wins:recent.filter(x=>x.win).length,avgFor:avg('for'),avgAgainst:avg('against'),margin:avg('margin'),total:avg('total'),recent});
+  }
+  return grouped;
+}
+function independentGameRead(form,kind,side,point,home,away,league){
+  const h=form.get(marketKey(home)),a=form.get(marketKey(away));
+  if(!h||!a)return{verified:false,reason:'Both teams need at least three verified earlier final games'};
+  const team=side==='home'?h:side==='away'?a:null,other=side==='home'?a:side==='away'?h:null;
+  let eligible=false,hitRate=null,evidence='';
+  if(kind==='h2h'&&team){
+    eligible=team.wins/team.games>=.6&&team.margin>other.margin+.75&&team.avgAgainst<=other.avgFor*1.2;
+    hitRate=team.wins/team.games;
+    evidence='L'+team.games+' wins '+team.wins+'; avg differential '+team.margin.toFixed(1)+'; opponent avg scored '+other.avgFor.toFixed(1)+' vs our conceded '+team.avgAgainst.toFixed(1);
+  }else if(kind==='spreads'&&team&&Number.isFinite(point)){
+    const recent=team.recent.map(x=>x.margin+point>0);
+    const covers=recent.filter(Boolean).length;
+    hitRate=covers/recent.length;
+    eligible=hitRate>=.65&&team.margin+point>0;
+    evidence='Covered this handicap in '+covers+'/'+recent.length+' recent games; avg scoring margin '+team.margin.toFixed(1);
+  }else if(kind==='totals'&&Number.isFinite(point)){
+    const across=[...h.recent,...a.recent],hits=across.filter(x=>side==='over'?x.total>point:x.total<point).length;
+    hitRate=hits/across.length;
+    const projection=(h.avgFor+a.avgAgainst+a.avgFor+h.avgAgainst)/2;
+    eligible=hitRate>=.65&&Math.abs(projection-point)>.8&&(side==='over'?projection>point:projection<point);
+    evidence='Historical similar-game totals '+hits+'/'+across.length+'; combined offensive/defensive mean '+projection.toFixed(1);
+  }
+  return{verified:eligible,hitRate,reason:eligible?evidence:'Team-form results do not support this exact market enough to qualify',evidence,homeGames:h.games,awayGames:a.games,source:'Independent ESPN completed-game history'};
+}
+
 async function buildCrossGameParlay({league,date,props,hawkKey,warnings}){
   const noResult=(reason,stats={})=>({available:false,gameCount:stats.gameCount||0,consideredMarkets:stats.consideredMarkets||0,reason,legs:[],legCount:0,combinedPrice:null,estimatedPrice:null,verifiedBook:null,status:'PASS — no cross-game parlay published'});
   const playbookKey=process.env.PlaybookAPI;
@@ -79,6 +141,7 @@ async function buildCrossGameParlay({league,date,props,hawkKey,warnings}){
   }catch(e){warnings.push('Cross-game Playbook markets could not be retrieved.')}
   const now=Date.now();
   lines=lines.filter(g=>Date.parse(g.startTime)>now+60000);
+  let independentForm=new Map();try{independentForm=await teamFormForGames(league,date)}catch(e){warnings.push('Independent recent team form unavailable; aggregate-only game lines cannot qualify as model-backed parlay legs.')}
   const candidates=[],scoped=new Map();
   for(const game of lines){
     const ml=game.lines?.moneyline||{},sp=game.lines?.spread||{},tot=game.lines?.totalPrice||{};
@@ -87,8 +150,9 @@ async function buildCrossGameParlay({league,date,props,hawkKey,warnings}){
     const add=(kind,selection,side,point,price,other,about)=>{
       const raw=marketScore(price,other);
       if(raw===null||!americanAllowed(Number(price))||raw<.51)return;
-      const core=Math.round(raw*82);
-      candidates.push({game:key,gameLabel:away+' @ '+home,gameStart:startTime,market:kind,marketLabel:marketKindLabel(kind),selection,side,point,price:null,aggregatePrice:Number(price),book:null,verifiedOdds:false,observedAt:null,marketShare:Number(raw.toFixed(3)),evidenceScore:core,reason:about+' Based on the listed two-sided aggregate market; a sportsbook offer and independent matchup advantage are not confirmed.',source:'Playbook aggregate',kind:'game'});
+      const form=independentGameRead(independentForm,kind,side,point,home,away,league);
+      const core=form.verified?Math.round(Math.min(76,49+Math.max(0,(form.hitRate||0)-.5)*34)):45;
+      candidates.push({marketOnly:!form.verified,marketEvidence:form,game:key,gameLabel:away+' @ '+home,gameStart:startTime,market:kind,marketLabel:marketKindLabel(kind),selection,side,point,price:null,aggregatePrice:Number(price),book:null,verifiedOdds:false,observedAt:null,marketShare:Number(raw.toFixed(3)),evidenceScore:core,reason:about+' '+(form.verified?form.evidence+'.':'Independent historical matchup evidence is missing or conflicts with this market.')+' The price is an aggregate market, not a verified sportsbook offer.',source:'Playbook aggregate',kind:'game'});
     };
     add('h2h',home+' moneyline','home',null,Number(ml.home),Number(ml.away),'Market favours '+home+'.');
     add('h2h',away+' moneyline','away',null,Number(ml.away),Number(ml.home),'Market favours '+away+'.');
@@ -169,12 +233,12 @@ async function buildCrossGameParlay({league,date,props,hawkKey,warnings}){
   const maxLegs=quotedGames.size>=6?7:quotedGames.size>=4?6:quotedGames.size>=2?5:4;
   const chosen=[],seen=new Set();
   for(const p of candidates){
-    if(seen.has(p.game)||p.evidenceScore<54)continue;
+    if(seen.has(p.game)||p.evidenceScore<54||p.marketOnly)continue;
     chosen.push(p);seen.add(p.game);
     if(chosen.length>=maxLegs)break;
   }
   // At least four distinct matchups are required, never pad with a second leg from one game.
-  if(chosen.length<4)return noResult('Fewer than four distinct upcoming games have qualifying lines or research support. No cross-game parlay is forced.',{gameCount:scoped.size,consideredMarkets:candidates.length});
+  if(chosen.length<4)return noResult('Fewer than four distinct games have independently supported research selections. Odds-only favourites are not treated as verified value, and the model will not force a parlay.',{gameCount:scoped.size,consideredMarkets:candidates.length});
   const distinctBooks=[...new Set(chosen.map(x=>x.book).filter(Boolean))];
   const uniform=chosen.every(x=>x.verifiedOdds)&&distinctBooks.length===1;
   let arithmeticEstimate=null;
