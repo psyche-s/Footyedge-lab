@@ -41,6 +41,7 @@ jobs:
           if [ "$EVENT" = "workflow_dispatch" ]; then
             echo "allowed=true" >> "$GITHUB_OUTPUT"
             echo "league=all" >> "$GITHUB_OUTPUT"
+              echo "source=auto" >> "$GITHUB_OUTPUT"
           else
             today="$(TZ=America/Toronto date +%Y-%m-%d)"
             hour="$(TZ=America/Toronto date +%H)"
@@ -50,6 +51,7 @@ jobs:
               if [ "$hour" = "16" ]; then
                 echo "allowed=true" >> "$GITHUB_OUTPUT"
                 echo "league=nhl" >> "$GITHUB_OUTPUT"
+                echo "source=free" >> "$GITHUB_OUTPUT"
                 echo "Friday NHL pregame publication at 4 PM ET"
               else
                 echo "allowed=false" >> "$GITHUB_OUTPUT"
@@ -57,6 +59,7 @@ jobs:
             elif [ "$hour" = "07" ] || [ "$hour" = "13" ]; then
               echo "allowed=true" >> "$GITHUB_OUTPUT"
               echo "league=all" >> "$GITHUB_OUTPUT"
+              echo "source=auto" >> "$GITHUB_OUTPUT"
             else
               echo "allowed=false" >> "$GITHUB_OUTPUT"
             fi
@@ -76,7 +79,7 @@ jobs:
         if: steps.window.outputs.allowed == 'true'
         env:
           INPUT_LEAGUE: ${{ github.event_name == 'workflow_dispatch' && inputs.league || steps.window.outputs.league }}
-          INPUT_SOURCE: ${{ inputs.source || 'auto' }}
+          INPUT_SOURCE: ${{ github.event_name == 'workflow_dispatch' && inputs.source || steps.window.outputs.source }}
         run: node scripts/publish-board.js
       - name: Publish board data in Releases without code commit
         if: steps.window.outputs.allowed == 'true'
