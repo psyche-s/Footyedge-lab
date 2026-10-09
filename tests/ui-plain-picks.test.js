@@ -39,9 +39,9 @@ const pick={
 test('Actual main pick card shows plain evidence, opponent-position context and graph',()=>{
  const h=app.makePropCard(pick,0);
  assert.ok(h.includes('Why this pick'));
- assert.ok(h.includes('8 of the last 10'));
- assert.ok(h.includes('4 of the last 5'));
- assert.ok(h.includes('same position'));
+ assert.ok(h.includes('8 of his last 10'));
+ assert.ok(h.includes('4 of his last 5'));
+ assert.ok(h.includes('this opponent'));
  assert.ok(h.includes('See last 5/10 games'));
  assert.ok(h.includes('Odds')&&h.includes('Check bookmaker'));
  assert.ok(!h.includes('RAPM'));
@@ -51,7 +51,7 @@ test('Actual main pick card shows plain evidence, opponent-position context and 
 test('Scorer card shows the same approachable reason without pretending probabilities',()=>{
  const h=app.scoringPickCard({...pick,market:'goals',selection:'Anytime goalscorer',line:.5,average:.3},0);
  assert.ok(h.includes('Why this pick'));
- assert.ok(h.includes('Scoring plays are less predictable'));
+ assert.ok(h.includes('cleared this pick'));
  assert.ok(h.includes('Last 5')&&h.includes('Last 10'));
  assert.ok(h.includes('prop-breakdown'));
 });
@@ -60,8 +60,8 @@ test('SGP card explains individual legs instead of backend models',()=>{
   {...pick,personId:'8471002',player:'Player B'},
   {...pick,personId:'8471003',player:'Player C'}]},0);
  assert.ok(h.includes('3 picks for this game'));
- assert.ok(h.includes('Hit this line'));
- assert.ok(h.includes('Combined odds not confirmed'));
+ assert.ok(h.includes('cleared this pick'));
+ assert.ok(h.includes('Check combined odds'));
  assert.ok(!h.includes('correlation-adjusted'));
 });
 test('No visible fallback source banner or raw provider warnings',()=>{
