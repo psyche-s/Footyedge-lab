@@ -14,3 +14,5 @@ Friday October 9 early afternoon: refresh/publish NHL slate again with new sourc
 Retry after reconciling SportsLab clean-card regression tests with current displayed language. Preserve previous live release if tests fail. Publish current-day NHL only after tests pass; scheduled 4 PM ET final freeze unchanged.
 
 Final replay: initial two CI rejections were outdated UI test expectations and sample-gate fixture; now corrected. Publish verified current-day NHL board if tests pass. Do not change 4PM scheduled freeze.
+
+Publication retry after removing duplicated backend sample-note text to fit GitHub Release limits. Leave L5/L10, actual H2H game logs, all original 10 chart inputs and new position-specific shot numbers. Maintain 4 PM ET final freeze.
