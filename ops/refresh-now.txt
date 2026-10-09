@@ -3,3 +3,5 @@ Retry: 2026-10-09 02:14 ET; fixed compact publication snapshot so full player ch
 Retry third attempt: 2026-10-09 02:17 ET. Publisher is below release limit by compacting duplicated possession stats and preserving original Top10/scorer graphs. Keep 4 PM schedule.
 
 Today NHL refreshed research requested after updated 5v5 possession collector and simplified pick explanations. Trigger current-day verified NHL data-only publication now; leave official 4 PM ET refresh and immutable pregame freeze intact. Do not fabricate odds, injury status, or RAPM coefficients.
+
+Owner-triggered new Friday NHL publication with official scored-position GA/GP, complete L5/L10 & H2H, current/prior season disclosure, possession, safe ranking and clean human-readable explanations. Run now on push, data-only GitHub Release; retain 4 PM freeze. No invented odds or deployed RAPM.
