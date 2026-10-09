@@ -7,3 +7,4 @@ Today NHL refreshed research requested after updated 5v5 possession collector an
 Owner-triggered new Friday NHL publication with official scored-position GA/GP, complete L5/L10 & H2H, current/prior season disclosure, possession, safe ranking and clean human-readable explanations. Run now on push, data-only GitHub Release; retain 4 PM freeze. No invented odds or deployed RAPM.
 
 Friday Oct 9 2026 owner immediate NHL reload, second post-upgrade check: verified position scorer GA/GP by opponent C/LW/RW/D, recent L5/L10 plus H2H form, compact release notes. Build data-only from current main (do not freeze the pregame 4PM scheduled board).
+Friday October 9 early afternoon: refresh/publish NHL slate again with new source-backed CBJ/PIT/SEA injury exclusions and WSH uncertainty. Read latest GitHub main, publish corrected cards as a data-only GitHub release; keep the 4 PM ET pregame freeze intact. Source file ops/nhl-availability-2026-10-09.json.
