@@ -2,7 +2,7 @@
 
 **This is an independent retrospective game study, NOT a grading of SportsLab's pregame predictions.** There is no confirmed frozen October 8 pick archive. A pick or SGP counts as a model hit/miss only if the *exact selection, line and timestamp* were published before that game's start.
 
-Source: ESPN public scoreboard through SportsLab, checked late October 8 ET, plus official NHL recaps and the NFL scoreboard. Two West Coast NHL matches and the MLB game were still in progress at the checkpoint.
+Source: ESPN public scoreboard through SportsLab, checked late October 8 ET, plus official NHL recaps and the NFL scoreboard. One late NHL game (Toronto at Vegas) and the MLB game were not officially marked final on the latest scoreboard check. Colorado at Calgary was subsequently confirmed final.
 
 ## NHL — all ten October 8 games
 
@@ -16,10 +16,10 @@ Source: ESPN public scoreboard through SportsLab, checked late October 8 ET, plu
 | Vancouver at Carolina | 2–7 | Final | Stankoven 3 goals, Svechnikov 2, Walker 4 assists. Three Carolina power-play goals drove interrelated props. |
 | Chicago at NY Islanders | 1–4 | Final | Horvat two goals, including empty-netter; defence had shifted due to injury. Team-line role and goalie pull matter. |
 | San Jose at St. Louis | 3–2 | Final/OT | Darnell Nurse scored in OT; Celebrini absent. Full-game ML includes OT but 60-minute markets can settle differently. |
-| Colorado at Calgary | 7–3 | In progress | Already ten goals before final. Track back-to-back/rest and goalie environment; no final grade yet. |
+| Colorado at Calgary | 7–3 | Final | Ten goals; back-to-back/rest and unexpected scoring/goalie conditions can substantially change totals. |
 | Toronto at Vegas | 3–3 | In progress | Late West Coast game, only through second period at checkpoint. No final grade yet. |
 
-Eight NHL games confirmed final. Of those eight, 3 ended with at least seven combined goals; 5 ended with six or fewer. This single-night count is NOT a statistical prior and is not a recorded betting hit rate.
+**Nine of ten NHL games confirmed final** on the later scoreboard check. Of those nine, 4 ended with at least seven combined goals; 5 ended with six or fewer. This single-night count is NOT a statistical prior and is not a recorded betting hit rate.
 
 ## NFL — Tampa Bay at Dallas
 
@@ -50,7 +50,7 @@ At check: Guardians 9, White Sox 5, bottom of ninth — **still in progress**. A
 - StatsHawk monthly allowance is exhausted; no-key league fallbacks are required.
 - Specific NHL defensive shot allowance, starting goalies, special-teams usage and player game script are not always verified pregame. Missing checks must remain labeled.
 - Deployment of these code changes and successful GitHub Actions runs still require validation.
-- The 2 incomplete NHL games and MLB ALDS game need a final-score revisit, not assumed results.
+- The remaining Toronto–Vegas NHL game and MLB ALDS game need a confirmed final-score revisit, not assumed results.
 
 ## Sources
 
