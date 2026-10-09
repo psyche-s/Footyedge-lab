@@ -43,6 +43,8 @@ At check: Guardians 9, White Sox 5, bottom of ninth — **still in progress**. A
 6. Daily 7 AM Toronto freeze stored in a dated GitHub Release only once. Later manual update cannot overwrite that original pregame board.
 7. Postgame review scheduled for around 9 AM Toronto the following morning; scripts/review-board.js grades *only original frozen picks* from official NHL, NFL, MLB box scores. Missing player stats are **ungraded** rather than losses. Distinct same-selection props are deduplicated across Top 10 and SGP appearances.
 8. Review UI clearly distinguishes archived true picks and grades from independently observed game scores. Market reweighting should not occur before 25+ uniquely graded picks across multiple dates.
+9. Early-season sample integrity: NHL and NFL season statistics now use their actual fall-season boundaries, rather than mislabeling January–April results as new October-season games. Rolling L10 may still include prior-season games and must be labeled separately.
+10. Free-source research SGPs now stop at three distinct players per game until bookmaker prices and correlation can be independently checked; no free-source 4–5-leg correlation claims.
 
 ## Open limitations
 
