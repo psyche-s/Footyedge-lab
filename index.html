@@ -334,56 +334,60 @@ function friendlyStat(p){
   'batting.hr':'home runs','batting.h':'hits','pitching.so':'strikeouts',outs:'pitcher outs'};
  return names[k]||String(p.marketLabel||'events').toLowerCase();
 }
+
 function plainWhy(p,scoring=false){
- const line=p.line!=null?Number(p.line):null,last=p.last10||{},last5=p.last5||{},
-  market=friendlyStat(p),side=String(p.side||'Over').toLowerCase(),parts=[];
- const threshold=Number.isFinite(line)?(
-  side==='over'&&Number.isInteger(line+.5)?(line+.5)+'+ ':side==='over'?'over '+line+' ':'under '+line+' '
- ):'';
- const textMarket=threshold+market;
- if(last.games>=3&&Number.isFinite(Number(last.hits))){
-  parts.push('This line landed in '+last.hits+' of the last '+last.games+' games'+
-   (last5.games>=3?' ('+last5.hits+' of the last '+last5.games+' most recent).':'.'));
- }else parts.push('Recent results are limited, so this is an early research pick.');
- if(!scoring&&Number.isFinite(Number(p.average))&&p.average!=null){
-  const avg=Number(p.average);
-  parts.push('Average '+avg.toFixed(1)+' '+market+' per game'+(threshold?' against a '+textMarket+' pick.':'.'));
- }
- const matches=p.h2h?.summary;
- if(matches?.games>=3&&Number.isFinite(Number(matches.hits))){
-  parts.push('Against this opponent, the same line landed '+matches.hits+' of '+matches.games+' times.');
- }
- const opp=p.opponentPossession;
- if(String(p.league||'').toLowerCase()==='nhl'&&opp?.verified&&opp.currentSeasonGames>=3&&
-     Number.isFinite(opp.sogAgainstPerGame)&&(!scoring||market==='shots')){
-  parts.push('The opponent recently allowed '+opp.sogAgainstPerGame.toFixed(1)+' shots on goal per game at even strength.');
- }else if(!scoring&&p.positionAllowed?.available&&Number(p.positionAllowed.games)>=3&&
-      Number.isFinite(p.positionAllowed.averagePerPlayer)){
-  parts.push('Players at this position averaged '+p.positionAllowed.averagePerPlayer.toFixed(1)+' '+market+' against this opponent.');
- }
- const usage=p.usage;
- if(String(p.league||'').toLowerCase()==='nhl'&&usage?.verified&&usage.currentSeasonGames>=5&&
-    Number.isFinite(usage.toiChangeMinutes)&&Math.abs(usage.toiChangeMinutes)>=1.5){
-   parts.push('Playing time is '+(usage.toiChangeMinutes>0?'rising':'falling')+' recently.');
- }
- if(scoring&&p.opportunity?.verified&&Number.isFinite(p.opportunity.last10Average)&&
-    String(p.league||'').toLowerCase()==='nhl'){
-   parts.push('He has averaged '+p.opportunity.last10Average.toFixed(1)+' shots per game, supporting his chance to score.');
- }
- return parts.slice(0,3).join(' ');
+  const last5=p.last5||{},last10=p.last10||{},why=[],market=friendlyStat(p),isNHL=String(p.league||'').toLowerCase()==='nhl',
+    line=Number(p.line??p.point),side=String(p.side||'Over').toLowerCase(),hasLine=Number.isFinite(line);
+  const cleanHit=x=>Number.isFinite(Number(x?.games))&&Number(x.games)>=3&&Number.isFinite(Number(x?.hits));
+  if(cleanHit(last5)){
+    why.push('He has cleared this pick in '+last5.hits+' of his last '+last5.games+' games'+(cleanHit(last10)?', and '+last10.hits+' of his last '+last10.games+' overall.':'.'));
+  }else if(cleanHit(last10)){
+    why.push('He has cleared this pick in '+last10.hits+' of his last '+last10.games+' games.');
+  }else{
+    why.push('There are only a few verified games to judge his recent form.');
+  }
+  // Facts about the player's own scoring/shooting ability, without overstating
+  // what a past hit rate predicts for the next game.
+  if(scoring){
+    const shots=Number(p.opportunity?.last10Average);
+    if(isNHL&&p.opportunity?.verified&&Number.isFinite(shots)&&shots>0)
+      why.push('He is averaging '+shots.toFixed(1)+' shots on goal, giving him regular chances to score.');
+  }else if(Number.isFinite(Number(p.average))&&p.average!==null&&p.average!==undefined&&hasLine){
+    const avg=Number(p.average);
+    if(side==='over'&&avg>line||side==='under'&&avg<line)
+      why.push('His '+avg.toFixed(1)+' '+market+' average is on the right side of this line.');
+    else why.push('His '+avg.toFixed(1)+' '+market+' average is close to or below the required line, so this is less convincing.');
+  }
+  const h=p.h2h?.summary;
+  if(why.length<3&&cleanHit(h))
+    why.push('Against this opponent, it landed '+h.hits+' out of '+h.games+' times.');
+  if(why.length<3&&isNHL&&p.usage?.verified&&p.usage.currentSeasonGames>=5&&
+      Number.isFinite(p.usage.toiChangeMinutes)&&Math.abs(p.usage.toiChangeMinutes)>=1.5)
+    why.push('His playing time has '+(p.usage.toiChangeMinutes>0?'increased':'dropped')+' recently.');
+  if(why.length<3&&isNHL&&p.opponentPossession?.verified&&p.opponentPossession.currentSeasonGames>=3&&
+    Number.isFinite(p.opponentPossession.sogAgainstPerGame)&&
+    ['sog','shots'].includes(String(p.market||p.stat||'').toLowerCase()))
+    why.push('This opponent has allowed about '+p.opponentPossession.sogAgainstPerGame.toFixed(1)+' shots on goal per game at even strength recently.');
+  if(why.length<3&&p.positionAllowed?.available&&Number(p.positionAllowed.games)>=3&&
+    Number.isFinite(p.positionAllowed.averagePerPlayer))
+    why.push('Players at his position have averaged '+p.positionAllowed.averagePerPlayer.toFixed(1)+' '+market+' against this opponent.');
+  return why.slice(0,3).join(' ');
 }
 function pickSafetyNote(p){
- const a=String(p.availability?.status||'').toLowerCase(),flags=p.quality?.flags||[];
- if(['out','inactive','confirmed_out'].includes(a))return '<div class="plain-risk">Player is out — skip this pick.</div>';
- if(['questionable','doubtful','uncertain'].includes(a))return '<div class="plain-risk">Check injury status before playing.</div>';
- if(flags.includes('starting_qb_change'))return '<div class="plain-risk">Starting quarterback change could affect opportunities.</div>';
- if(flags.includes('ice_time_recently_declining'))return '<div class="plain-risk">Recent playing time is down.</div>';
- if(flags.includes('role_volume_not_verified')&&String(p.league||'').toLowerCase()==='nhl'&&
-   ['goals','assists','pts'].includes(String(p.market||'')))return '<div class="plain-risk">Confirm tonight’s line and power-play role.</div>';
- return '';
+ const status=String(p.availability?.status||'').toLowerCase(),flags=p.quality?.flags||[];
+ let note='';
+ if(['out','inactive','confirmed_out'].includes(status))note='He is ruled out. Skip this pick.';
+ else if(['questionable','doubtful','uncertain'].includes(status))note='Injury status is uncertain. Check before playing.';
+ else if(flags.includes('starting_qb_change'))note='A change at quarterback could affect his opportunities.';
+ else if(flags.includes('ice_time_recently_declining'))note='His recent playing time is falling.';
+ else if(flags.includes('new_season_usage_sample_small')||flags.includes('opponent_5v5_early_season_sample'))
+   note='The season is still new, so some trends include older games.';
+ else if(flags.includes('role_volume_not_verified')&&String(p.league||'').toLowerCase()==='nhl'&&
+  ['goals','assists','pts'].includes(String(p.market||'')))note='Check tonight’s line and power-play role.';
+ return note?'<p class="plain-risk">'+esc(note)+'</p>':'';
 }
-function plainWhyMarkup(p,scorer=false){
- return '<div class="plain-why"><strong>Why this pick</strong><p>'+esc(plainWhy(p,scorer))+'</p></div>'+pickSafetyNote(p);
+function plainWhyMarkup(p,scoring=false){
+ return '<div class="plain-why"><strong>Why this pick?</strong><p>'+esc(plainWhy(p,scoring))+'</p></div>'+pickSafetyNote(p);
 }
 
 function scoringPickCard(p,i){
@@ -398,7 +402,7 @@ async function loadScoringBoard(selectedSport,date,refresh=false){
   try{
     const p=await getScoring(selectedSport,date,refresh);
     if(tab!=='scorers'||sport!==selectedSport||!box.isConnected)return;
-    box.innerHTML=(p.groups||[]).map(g=>'<section class="scorer-group"><div class="scorer-grouphead"><h3>'+esc(g.title)+'</h3><span class="tiny">'+esc(g.picks?.length||0)+' research candidates</span></div>'+(g.picks?.length?'<div class="edge-stack">'+g.picks.map(scoringPickCard).join('')+'</div>':'<div class="edge-card"><strong>No strong picks yet</strong><p class="tiny">Not enough recent evidence to support a scoring pick.</p></div>')+'</section>').join('');
+    box.innerHTML=(p.groups||[]).map(g=>'<section class="scorer-group"><div class="scorer-grouphead"><h3>'+esc(g.title)+'</h3><span class="tiny">'+esc(g.picks?.length||0)+' possible picks</span></div>'+(g.picks?.length?'<div class="edge-stack">'+g.picks.map(scoringPickCard).join('')+'</div>':'<div class="edge-card"><strong>No picks stand out yet</strong><p class="tiny">Not enough recent evidence to support a scoring pick.</p></div>')+'</section>').join('');
     box.innerHTML=publicSourceNotice(p)+box.innerHTML;bindPropBreakdowns(box);
     const count=document.getElementById('scorerscoverage');if(count)count.textContent=(p.scorers?.length||0)+' possible scorers · '+(p.scorers||[]).filter(x=>x.priced).length+' with posted sportsbook odds';
   }catch(e){
@@ -516,11 +520,11 @@ function crossGameSelection(p){
 }
 function renderCrossGame(c,compact=false){
   if(!c?.available||!(c.legs||[]).length){
-    return '<div class="edge-card cross-card"><div class="eyebrow">1 best cross-game parlay</div><h3>No strong parlay today</h3><p class="tiny">'+esc(c?.reason||'Cross-game evaluation was unavailable.')+'</p><p class="tiny">Not enough strong picks across different games. Nothing is forced.</p></div>';
+    return '<div class="edge-card cross-card"><div class="eyebrow">1 best cross-game parlay</div><h3>No parlay stands out today</h3><p class="tiny">'+esc(c?.reason||'There are not enough strong picks from different games.')+'</p><p class="tiny">Not enough strong picks across different games. Nothing is forced.</p></div>';
   }
   const quoted=Number(c.verifiedLegs||0),total=c.legCount||c.legs.length;
-  const estimated=c.estimatedPrice&&quoted===total?'<div class="cross-estimate"><span>Illustrative arithmetic if all individual prices remain available</span><strong>'+esc(c.estimatedPrice)+'</strong><small>Not an accepted sportsbook parlay quote</small></div>':'<div class="cross-estimate"><span>Combined sportsbook odds</span><strong>Not verified</strong><small>'+quoted+' of '+total+' selections have sportsbook-specific prices</small></div>';
-  return '<article class="edge-card cross-card"><div class="edge-cardtop"><div class="edge-rank">★</div><div class="edge-player"><strong>Best cross-game research parlay</strong><span class="edge-vs">'+esc(total)+' different games · '+esc(c.league?.toUpperCase()||sport)+' · '+esc(c.date||iso(day()))+'</span></div><span class="edge-status">'+esc(quoted===total?'All legs individually priced':'Research-only')+'</span></div><div class="cross-lines">'+c.legs.map(crossGameSelection).join('')+'</div>'+estimated+'<details class="edge-details"><summary>Why these picks?</summary><p>'+esc(c.explanation||'These selections had the strongest available form and matchups.')+'</p><p>Check the prices, lineup and combined parlay at your sportsbook before playing.</p></details></article>';
+  const estimated=c.estimatedPrice&&quoted===total?'<div class="cross-estimate"><span>Illustrative arithmetic if all individual prices remain available</span><strong>'+esc(c.estimatedPrice)+'</strong><small>Check combined odds at your sportsbook</small></div>':'<div class="cross-estimate"><span>Combined sportsbook odds</span><strong>Not verified</strong><small>'+quoted+' of '+total+' selections have sportsbook-specific prices</small></div>';
+  return '<article class="edge-card cross-card"><div class="edge-cardtop"><div class="edge-rank">★</div><div class="edge-player"><strong>Best cross-game parlay</strong><span class="edge-vs">'+esc(total)+' different games · '+esc(c.league?.toUpperCase()||sport)+' · '+esc(c.date||iso(day()))+'</span></div><span class="edge-status">'+esc(quoted===total?'All legs individually priced':'Odds to check')+'</span></div><div class="cross-lines">'+c.legs.map(crossGameSelection).join('')+'</div>'+estimated+'<details class="edge-details"><summary>Why these picks?</summary><p>'+esc(c.explanation||'These selections had the strongest available form and matchups.')+'</p><p>Check the prices, lineup and combined parlay at your sportsbook before playing.</p></details></article>';
 }
 async function loadCrossGameParlay(s,date,refresh=false){
   const root=document.getElementById('crossgame');if(!root)return;
@@ -553,7 +557,7 @@ function propBreakdownMarkup(p){
       return{games:vals.length,hits:rows.filter(x=>x.hit).length,average:vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null};
     };
     freeDetailStore.set(id,{available:true,league:p.league||sport.toLowerCase(),player:p.player,position:p.position||null,stat,line,side:String(p.side||'Over').toLowerCase(),selectedOpponent:p.opponent||null,
-      scope:'Official/public historical player game logs · '+(p.source||'public data'),last5:{games:last5,summary:summary(last5)},last10:{games:logged,summary:summary(logged)},
+      scope:'Recent completed games · '+(p.source||'public data'),last5:{games:last5,summary:summary(last5)},last10:{games:logged,summary:summary(logged)},
       headToHead:{opponent:p.opponent||null,games:p.h2h?.games||[],summary:p.h2h?.summary||null,note:(p.h2h?.games||[]).length?'Real recorded head-to-head appearances only.':'No verified recent direct meetings in retrieved seasons.'},
       positionAllowed:p.positionAllowed||{available:false,position:p.position||null,opponent:p.opponent||null,reason:'Free sources did not establish a reliable five-game position-allowed sample for this market.'},
       notes:['No verified player-prop bookmaker odds or confirmed lineup are implied by these historical logs.'],
@@ -565,7 +569,7 @@ function propBreakdownMarkup(p){
 function decimalStat(x){return Number.isFinite(Number(x))?Number(x).toFixed(1):'—'}
 function propBreakdownLineLabel(d){const n=Number(d.line),stat=d.stat;const name=niceMarket(stat);return (d.side==='under'?'Under ':'Over ')+n+' '+name}
 function makeGameLogChart(log,line,mode,side){
-  if(!log?.length)return'<p class="tiny">No verified game logs for this period.</p>';
+  if(!log?.length)return'<p class="tiny">No recent game results available.</p>';
   const rows=log.slice(-10),wide=680,top=30,left=43,right=18,bottom=59,height=276,plotH=height-top-bottom,plotW=wide-left-right;
   const mx=Math.max(1,line,...rows.map(x=>Number(x.value)||0));
   const ceiling=Math.max(mx+0.5,Math.ceil(mx*1.2*2)/2);
@@ -617,7 +621,7 @@ async function loadPropBreakdown(detail){
   const person=detail.dataset.person,market=detail.dataset.market,line=detail.dataset.line,date=detail.dataset.date;
   const params=new URLSearchParams({mode:'prop-detail',person_id:person,league:sport.toLowerCase(),stat:market,line,side:(detail.dataset.side||'Over').toLowerCase(),opponent:detail.dataset.opponent||'',date,opponent_id:detail.dataset.opponentId||'',game_id:detail.dataset.gameId||''});
   const key=params.toString();
-  detail.dataset.loaded='loading';content.innerHTML='<div class="prop-loading">Retrieving actual player game logs, previous meetings and defensive position matchups…</div>';
+  detail.dataset.loaded='loading';content.innerHTML='<div class="prop-loading">Loading recent games and matchup history…</div>';
   try{
     let promise=propBreakdownCache.get(key);
     if(!promise){promise=fetch('/api/statshawk-slate?'+key).then(async r=>{const p=await r.json();if(!r.ok||!p.available)throw new Error(p.error||'Opponent research unavailable');return p});propBreakdownCache.set(key,promise)}
@@ -641,12 +645,12 @@ function makeSGPCard(g,i){
  const n=g.legs?.length||0;
  return '<article class="edge-card sgp-result"><div class="edge-cardtop"><div class="edge-rank">'+(i+1)+'</div><div class="edge-player"><strong>'+esc(g.game)+'</strong><span class="edge-vs">'+n+' picks for this game</span></div></div>'+
   '<div class="edge-leglist">'+(g.legs||[]).map(p=>pickMini(p)).join('')+'</div>'+
-  '<div class="edge-foot"><span>'+(g.combinedPrice?'<strong>Combined odds: '+esc(g.combinedPrice)+'</strong>':'Combined odds not confirmed')+'</span>'+
+  '<div class="edge-foot"><span>'+(g.combinedPrice?'<strong>Combined odds: '+esc(g.combinedPrice)+'</strong>':'Check combined odds')+'</span>'+
   '<small>Check player availability and that your sportsbook accepts these legs together.</small></div></article>';
 }
 function publicSourceNotice(p){return '';}
-async function loadRankedSGPs(s,date,refresh=false){const box=document.getElementById('sgpmarket');if(!box)return;box.innerHTML='<div class="edge-skeleton">Checking today’s game parlays…</div>';try{const p=await getRanked(s,date,refresh);if(!box.isConnected||tab!=='sgp'||sport!==s)return;const groups=p.sgps||[];box.innerHTML=groups.length?'<div class="edge-stack">'+groups.map((g,i)=>makeSGPCard(g,i)).join('')+'</div>':'<div class="edge-card"><strong>No strong same-game parlay today</strong><p class="tiny">We found '+esc(p.props?.length||0)+' possible player picks, but not enough reliable options in one game. Nothing is forced.</p><button type="button" class="edge-navigate" data-go="props">View top individual props →</button></div>';box.innerHTML=publicSourceNotice(p)+box.innerHTML;box.querySelectorAll('[data-go="props"]').forEach(b=>b.onclick=()=>{tab='props';render()});document.getElementById('sgpcoverage').textContent=groups.length+' game parlays · '+esc(p.props?.length||0)+' player picks reviewed';const crossPreview=document.getElementById('crosspreview');if(crossPreview){crossPreview.innerHTML=renderCrossGame(p.crossGameParlay||null,true);bindPropBreakdowns(crossPreview);bindTeamH2Hs(crossPreview)}bindPropBreakdowns(box)}catch(e){box.innerHTML='<div class="edge-card">SGP analysis could not load. <button class="edge-retry">Try again</button></div>';box.querySelector('.edge-retry')?.addEventListener('click',()=>loadRankedSGPs(s,date,true))}}
-async function loadRankedProps(s,date,refresh=false){const box=document.getElementById('rankedprops');if(!box)return;box.innerHTML='<div class="edge-skeleton">Checking today’s player picks…</div>';try{const p=await getRanked(s,date,refresh);if(!box.isConnected||tab!=='props'||sport!==s)return;const props=p.props||[];box.innerHTML=props.length?'<div class="edge-stack">'+props.map((x,i)=>makePropCard(x,i)).join('')+'</div>':'<div class="edge-card"><strong>No strong player picks yet</strong><p class="tiny">Not enough reliable recent results or lineup information yet. Check again closer to game time.</p></div>';document.getElementById('propcoverage').textContent=props.length+' of 10 player picks · '+(p.pricedProps||0)+' with listed sportsbook odds';box.innerHTML=publicSourceNotice(p)+box.innerHTML;bindPropBreakdowns(box)}catch(e){box.innerHTML='<div class="edge-card">Player prop analysis could not load. <button class="edge-retry">Try again</button></div>';box.querySelector('.edge-retry')?.addEventListener('click',()=>loadRankedProps(s,date,true))}}
+async function loadRankedSGPs(s,date,refresh=false){const box=document.getElementById('sgpmarket');if(!box)return;box.innerHTML='<div class="edge-skeleton">Checking today’s game parlays…</div>';try{const p=await getRanked(s,date,refresh);if(!box.isConnected||tab!=='sgp'||sport!==s)return;const groups=p.sgps||[];box.innerHTML=groups.length?'<div class="edge-stack">'+groups.map((g,i)=>makeSGPCard(g,i)).join('')+'</div>':'<div class="edge-card"><strong>No same-game parlay stands out today</strong><p class="tiny">We found '+esc(p.props?.length||0)+' possible player picks, but not enough reliable options in one game. Nothing is forced.</p><button type="button" class="edge-navigate" data-go="props">View top individual props →</button></div>';box.innerHTML=publicSourceNotice(p)+box.innerHTML;box.querySelectorAll('[data-go="props"]').forEach(b=>b.onclick=()=>{tab='props';render()});document.getElementById('sgpcoverage').textContent=groups.length+' game parlays · '+esc(p.props?.length||0)+' player picks reviewed';const crossPreview=document.getElementById('crosspreview');if(crossPreview){crossPreview.innerHTML=renderCrossGame(p.crossGameParlay||null,true);bindPropBreakdowns(crossPreview);bindTeamH2Hs(crossPreview)}bindPropBreakdowns(box)}catch(e){box.innerHTML='<div class="edge-card">SGP analysis could not load. <button class="edge-retry">Try again</button></div>';box.querySelector('.edge-retry')?.addEventListener('click',()=>loadRankedSGPs(s,date,true))}}
+async function loadRankedProps(s,date,refresh=false){const box=document.getElementById('rankedprops');if(!box)return;box.innerHTML='<div class="edge-skeleton">Checking today’s player picks…</div>';try{const p=await getRanked(s,date,refresh);if(!box.isConnected||tab!=='props'||sport!==s)return;const props=p.props||[];box.innerHTML=props.length?'<div class="edge-stack">'+props.map((x,i)=>makePropCard(x,i)).join('')+'</div>':'<div class="edge-card"><strong>No picks stand out yet</strong><p class="tiny">Not enough reliable recent results or lineup information yet. Check again closer to game time.</p></div>';document.getElementById('propcoverage').textContent=props.length+' of 10 player picks · '+(p.pricedProps||0)+' with listed sportsbook odds';box.innerHTML=publicSourceNotice(p)+box.innerHTML;bindPropBreakdowns(box)}catch(e){box.innerHTML='<div class="edge-card">Player prop analysis could not load. <button class="edge-retry">Try again</button></div>';box.querySelector('.edge-retry')?.addEventListener('click',()=>loadRankedProps(s,date,true))}}
 async function loadGamePropSuggestions(card,s,date){const box=card.querySelector('.gameprops');if(!box)return;box.textContent='Loading available player shots and props…';try{const p=await getRanked(s,date);if(!box.isConnected)return;const h=cleanTeam(card.dataset.home),a=cleanTeam(card.dataset.away);const related=(p.candidateProps||p.props||[]).filter(x=>x.gameId===card.dataset.hawkGame||(cleanTeam(x.team)===h&&cleanTeam(x.opponent)===a)||(cleanTeam(x.team)===a&&cleanTeam(x.opponent)===h)).slice(0,5);if(related.length)box.innerHTML='<div class="panel-heading"><strong>Player prop opportunities</strong><small class="tiny">'+(s==='NHL'?'Shot volume first':'Observed game logs')+'</small></div>'+related.map(x=>'<div class="metric-pair"><span>'+esc(x.player)+' — '+esc(x.selection)+'</span><b>'+esc(statSummary(x.last10))+'</b></div>').join('')+'<p class="tiny">Past hit rates are descriptive. Go to Top 10 Props for lines, prices and complete evidence.</p>';else box.innerHTML='<strong>Player props</strong><p class="tiny">No qualifying, game-matched player prop research is available here yet. This is not a recommendation for the moneyline alone.</p>'}catch(e){box.innerHTML='<strong>Player research temporarily unavailable.</strong>'}}
 
 const researchMarkets={NHL:[['sog','Shots on goal'],['pts','Points'],['goals','Goals'],['assists','Assists'],['blocks','Blocked shots']],NFL:[['rec','Receptions'],['receiving.yards','Receiving yards'],['rushing.yards','Rushing yards'],['passing.yards','Passing yards'],['targets','Targets'],['rushing.att','Rushing attempts'],['passing.att','Passing attempts']],MLB:[['pitching.so','Pitcher Ks'],['outs','Pitcher outs'],['pitching.bb','Pitcher walks'],['pitching.h','Pitcher hits allowed'],['er','Earned runs'],['batting.h','Batter hits'],['total_bases','Total bases']]};
