@@ -413,7 +413,7 @@ async function scoringSlate(req,res,key,league,date){
       p.price=quote.price;p.book=quote.book;p.priced=true;p.observedAt=quote.observedAt;p.gameId=quote.gameId;
     }
   }catch(e){warnings.push('Verified scorer market prices could not be fully retrieved; research lines are not sportsbook offers.')}
-  EVOLUTION.applyQuality(scoring,()=>({formPreviouslyWeighted:true,postseason:league==='mlb'}));
+  EVOLUTION.applyQuality(scoring,()=>({formPreviouslyWeighted:true,postseason:league==='mlb'&&Number(date.slice(5,7))>=10}));
   scoring.sort((a,b)=>b.evidenceScore-a.evidenceScore||(b.last10?.games||0)-(a.last10?.games||0));
   let groups=markets.map(m=>{
     const candidates=scoring.filter(p=>p.marketKey===m.key),unique=[],seen=new Set(),teamCount=new Map();
@@ -540,7 +540,7 @@ async function rankedSlate(req,res,key,league,date){
   if(league==='mlb'&&!props.length)warnings.push('No verified starting-pitcher props passed the research filters today.');
   formTrend(props);
   await applyRosterAvailability(props,league,key,fetchData,warnings,nflTeamIds);
-  EVOLUTION.applyQuality(props,()=>({formPreviouslyWeighted:true,postseason:league==='mlb'}));
+  EVOLUTION.applyQuality(props,()=>({formPreviouslyWeighted:true,postseason:league==='mlb'&&Number(date.slice(5,7))>=10}));
   props.sort((a,b)=>b.evidenceScore-a.evidenceScore||(b.last10?.games||0)-(a.last10?.games||0));
   const picked=[],seen=new Set();for(const p of props){if(!seen.has(p.personId)){picked.push(p);seen.add(p.personId)}if(picked.length===10)break}
   const groups=new Map();
