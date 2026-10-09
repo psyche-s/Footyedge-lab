@@ -440,10 +440,11 @@ function nhlPositionMatchup(p){
 function visibleFormAndH2H(p){
  const h=p.h2h?.summary,trend=String(p.form?.read||'').trim(),
        hit=Number.isFinite(h?.games)&&h.games>0&&Number.isFinite(h.hits),
+       alreadyExplained=plainWhy(p).includes('Against this opponent,'),
        form=/improving/i.test(trend)?'Improving':/cooling/i.test(trend)?'Cooling':'';
- if(!hit&&!form)return'';
+ if((!hit||alreadyExplained)&&!form)return'';
  return'<div class="form-h2h-line">'+(form?'<span><b>Recent form:</b> '+esc(form)+'</span>':'')+
-   (hit?'<span><b>Against this opponent:</b> '+esc(h.hits)+' of '+esc(h.games)+' games</span>':'')+'</div>';
+   (hit&&!alreadyExplained?'<span><b>Against this opponent:</b> '+esc(h.hits)+' of '+esc(h.games)+' games</span>':'')+'</div>';
 }
 
 function plainWhyMarkup(p,scoring=false){
