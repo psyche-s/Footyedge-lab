@@ -1,6 +1,10 @@
 name: Publish SportsLab Picks (No Vercel Build)
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/refresh-now.txt'
   workflow_dispatch:
     inputs:
       league:
@@ -41,7 +45,14 @@ jobs:
           if [ "$EVENT" = "workflow_dispatch" ]; then
             echo "allowed=true" >> "$GITHUB_OUTPUT"
             echo "league=all" >> "$GITHUB_OUTPUT"
-              echo "source=auto" >> "$GITHUB_OUTPUT"
+            echo "source=auto" >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT" = "push" ]; then
+            # Owner can publish the latest NHL research immediately by editing ops/refresh-now.txt.
+            # Keep 4 PM scheduled re-publication/freeze intact; an early preview must NOT freeze it.
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            echo "league=nhl" >> "$GITHUB_OUTPUT"
+            echo "source=free" >> "$GITHUB_OUTPUT"
+            echo "Owner requested immediate NHL refresh"
           else
             today="$(TZ=America/Toronto date +%Y-%m-%d)"
             hour="$(TZ=America/Toronto date +%H)"
@@ -87,6 +98,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          TRIGGER_EVENT: ${{ github.event_name }}
         run: |
           shopt -s nullglob
           files=(published/*.json)
@@ -110,7 +122,7 @@ jobs:
             today="$(TZ=America/Toronto date +%Y-%m-%d)"
             hour="$(TZ=America/Toronto date +%H)"
             freeze="sportslab-freeze-${sport}-${today}"
-            if { [ "$hour" -lt 11 ] || { [ "$today" = "2026-10-09" ] && [ "$hour" = "16" ] && [ "$sport" = "nhl" ]; }; } && ! gh release view "$freeze" --repo "$GH_REPO" >/dev/null 2>&1; then
+            if [ "$TRIGGER_EVENT" != "push" ] && { [ "$hour" -lt 11 ] || { [ "$today" = "2026-10-09" ] && [ "$hour" = "16" ] && [ "$sport" = "nhl" ]; }; } && ! gh release view "$freeze" --repo "$GH_REPO" >/dev/null 2>&1; then
               gh release create "$freeze" --repo "$GH_REPO" --target main --title "Pregame freeze ${today} ${sport^^}" --notes-file "$file" --latest=false
               echo "Preserved immutable morning ${sport} picks for after-game review"
             fi
