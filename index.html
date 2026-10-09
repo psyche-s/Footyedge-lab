@@ -292,11 +292,12 @@ body{background:#0d0e10}
 .mini-why{font-size:11px;color:#afc9b8;margin:5px 0 9px;line-height:1.55}
 .edge-leg .prop-breakdown{margin-top:7px}
 
+.owner-research{font:700 12px inherit;border:0;background:rgba(167,177,190,.09);color:#d6e2da;border-radius:8px;padding:9px;cursor:pointer;text-align:left;width:100%}
 </style></head>
 <body><header class="head"><div class="headin wrap"><div><div class="brand">Sports<em>Lab</em></div><div class="subbrand">Sports intelligence</div></div><span class="status">● &nbsp; FREE DATA</span></div></header>
 <main class="wrap"><div class="sportbar" id="sports"><button class="sport active" data-s="NHL"><span class="emoji">🏒</span>NHL</button><button class="sport" data-s="NFL"><span class="emoji">🏈</span>NFL</button><button class="sport" data-s="MLB"><span class="emoji">⚾</span>MLB</button></div>
-<section class="sync-toolbar" aria-label="SportsLab data controls"><div class="sync-state"><span class="sync-led" aria-hidden="true"></span><div><strong id="syncTitle">Today's published board</strong><small id="syncInfo">Checking picks for today…</small></div></div><div class="sync-actions"><button id="refreshAll" type="button" title="Fetch today's latest data immediately; no Vercel deployment needed">↻ Refresh Stats</button><a id="publishPicks" href="https://github.com/psyche-s/SportsLab/actions/workflows/publish-board.yml" target="_blank" rel="noopener noreferrer" title="Owner-only: open GitHub Actions and choose Run workflow to publish new picks">↑ Publish Picks <span aria-hidden="true">↗</span></a><details class="sync-more"><summary aria-label="Owner site tools" title="More owner controls">⋯</summary><div class="sync-more-menu"><a href="https://github.com/psyche-s/SportsLab/actions/workflows/redeploy-site.yml" target="_blank" rel="noopener noreferrer">Deploy website code ↗</a><small>Use only when the design/code changes; Vercel limits still apply.</small></div></details></div></section>
-<nav class="nav" id="tabs"><button class="active" data-t="sgp">Best SGPs</button><button data-t="props">Top 10 Props</button><button data-t="cross">Cross-Game Parlay</button><button data-t="scorers">Top Scoring Picks</button><button data-t="games">Games &amp; Odds</button><button data-t="research">Deep Research</button><button data-t="review">Review</button></nav><section id="content"></section><footer>Scores and schedules: ESPN public scoreboard, subject to availability. Odds, player statistics and picks appear only after source verification. No guaranteed outcomes. Gamble responsibly.</footer></main>
+<section class="sync-toolbar" aria-label="SportsLab data controls"><div class="sync-state"><span class="sync-led" aria-hidden="true"></span><div><strong id="syncTitle">Today's published board</strong><small id="syncInfo">Checking picks for today…</small></div></div><div class="sync-actions"><button id="refreshAll" type="button" title="Fetch today's latest data immediately; no Vercel deployment needed">↻ Refresh Stats</button><a id="publishPicks" href="https://github.com/psyche-s/SportsLab/actions/workflows/publish-board.yml" target="_blank" rel="noopener noreferrer" title="Owner-only: open GitHub Actions and choose Run workflow to publish new picks">↑ Publish Picks <span aria-hidden="true">↗</span></a><details class="sync-more"><summary aria-label="Owner site tools" title="More owner controls">⋯</summary><div class="sync-more-menu"><button type="button" data-t="research" class="owner-research">Detailed research tools</button><a href="https://github.com/psyche-s/SportsLab/actions/workflows/redeploy-site.yml" target="_blank" rel="noopener noreferrer">Deploy website code ↗</a><small>Use only when the design/code changes; Vercel limits still apply.</small></div></details></div></section>
+<nav class="nav" id="tabs"><button class="active" data-t="sgp">Best SGPs</button><button data-t="props">Top 10 Props</button><button data-t="cross">Cross-Game Parlay</button><button data-t="scorers">Top Scoring Picks</button><button data-t="games">Games &amp; Odds</button><button data-t="review">Review</button></nav><section id="content"></section><footer>Picks are research, not guarantees. Check odds and availability before playing. Gamble responsibly.</footer></main>
 <nav class="bottom" id="bottom"><button data-t="sgp" class="active"><b>✧</b>SGPs</button><button data-t="props"><b>◈</b>Props</button><button data-t="cross"><b>⊞</b>Cross-game</button><button data-t="games"><b>▦</b>Games</button><button data-t="scorers"><b>✦</b>Scorers</button></nav>
 <script>
 let sport='NHL',tab='sgp',offset=0,serial=0;const nowET=new Date();const etParts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'America/Toronto',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(nowET).map(x=>[x.type,x.value]));const base=new Date(Number(etParts.year),Number(etParts.month)-1,Number(etParts.day),12);const cache=new Map();
@@ -343,24 +344,30 @@ function plainWhy(p,scoring=false){
   const threshold=over&&Number.isInteger(n+0.5)?String(n+0.5)+'+':(over?'over ':'under ')+n;
   words.push('Average: '+Number(p.average).toFixed(1)+' '+kind+' per game; this pick needs '+threshold+'.');
  }
- const usage=p.usage;
- if(usage?.verified&&usage.currentSeasonGames>=5&&
-   Number.isFinite(usage.toiChangeMinutes)&&Math.abs(usage.toiChangeMinutes)>=1.3){
-  words.push('Ice time has '+(usage.toiChangeMinutes>0?'increased':'decreased')+' recently.');
+ const byPosition=p.positionAllowed;
+ if(!scoring&&byPosition?.available&&Number(byPosition.games)>=3&&
+    Number.isFinite(Number(byPosition.averagePerPlayer))&&p.position){
+  words.push('Opposing players at the same position have averaged '+Number(byPosition.averagePerPlayer).toFixed(1)+
+    ' '+kind+' over the last '+byPosition.games+' games.');
  }
  const h=p.h2h?.summary;
  if(h?.games>=2)words.push('Against this opponent, '+h.hits+' of '+h.games+' past games hit the line.');
  const op=p.opponentPossession;
  if(!scoring&&String(p.league||'').toLowerCase()==='nhl'&&op?.verified&&
     op.currentSeasonGames>=3&&Number.isFinite(op.sogAgainstPerGame)){
-  words.push('Their opponent allows '+op.sogAgainstPerGame.toFixed(1)+' shots at 5-on-5 per game recently.');
+  words.push('The opponent allows '+op.sogAgainstPerGame.toFixed(1)+' shots at 5-on-5 per game recently.');
+ }
+ const usage=p.usage;
+ if(usage?.verified&&usage.currentSeasonGames>=5&&
+   Number.isFinite(usage.toiChangeMinutes)&&Math.abs(usage.toiChangeMinutes)>=1.3){
+  words.push('Ice time has '+(usage.toiChangeMinutes>0?'increased':'decreased')+' recently.');
  }
  if(scoring){
   if(String(p.league||'').toLowerCase()==='nhl'&&p.opportunity?.verified&&p.opportunity.last10Average!=null&&
      Number.isFinite(Number(p.opportunity.last10Average))){
    words.push('Shot volume: '+Number(p.opportunity.last10Average).toFixed(1)+' per game.');
   }
-  words.push('Goals, assists and touchdowns are less predictable than volume stats.');
+  words.push('Scoring plays are less predictable than shots or yardage.');
  }
  return words.slice(0,4).join(' ');
 }
