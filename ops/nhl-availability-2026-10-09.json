@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-09",
+  "reviewedAt": "2026-10-09T17:29:00Z",
+  "method": "Human-reviewed game-day reports; source-linked. Not a live injury API. Official lineup confirmation still required.",
+  "players": [
+    {
+      "team": "CBJ",
+      "player": "Ivan Provorov",
+      "status": "confirmed_out",
+      "reason": "Listed out with lower-body injury; earliest expected return after Friday.",
+      "source": "https://www.cbssports.com/nhl/gametracker/preview/NHL_20261009_PIT%40CLB/"
+    },
+    {
+      "team": "SEA",
+      "player": "Ryan Lindgren",
+      "status": "confirmed_out",
+      "reason": "NHL reports placed on IR, expected to miss four to six weeks.",
+      "source": "https://www.nhl.com/news/nhl-status-report-news-and-notes-october-8-2026"
+    },
+    {
+      "team": "PIT",
+      "player": "Justin Brazeau",
+      "status": "confirmed_out",
+      "reason": "Listed out with lower-body injury, not expected before October 10.",
+      "source": "https://www.cbssports.com/nhl/gametracker/preview/NHL_20261009_PIT%40CLB/"
+    },
+    {
+      "team": "WSH",
+      "player": "Matt Roy",
+      "status": "questionable",
+      "reason": "Day-to-day with a lower-body injury; latest game lineup needs confirmation.",
+      "source": "https://www.cbssports.com/nhl/gametracker/preview/NHL_20261009_NYR%40WAS/"
+    }
+  ]
+}
