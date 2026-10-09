@@ -421,11 +421,18 @@ function pickSafetyNote(p){
 
 
 function nhlOpponentShotContext(p){
- const x=p.opponentPossession,market=String(p.market||p.stat||'').toLowerCase();
- if(String(p.league||'').toLowerCase()!=='nhl'||!['sog','shots'].includes(market)||!x?.verified)return'';
- // A preseason or last-year-only figure belongs in research, not the main recommendation.
- if(Number(x.currentSeasonGames)<3||!Number.isFinite(x.sogAgainstPerGame))return'';
- return'<p class="pick-matchup">Matchup: '+esc(p.opponent||x.team)+' has allowed '+esc(x.sogAgainstPerGame.toFixed(1))+' shots per game at 5-on-5 over its last '+esc(x.games)+' games.</p>';
+ const x=p.opponentPossession,group=p.positionShotMatchup,market=String(p.market||p.stat||'').toLowerCase();
+ if(String(p.league||'').toLowerCase()!=='nhl'||!['sog','shots'].includes(market))return'';
+ // Prefer actual position-specific full-game SOG, never confuse it with GA/GP
+ // or an individual player's shooting forecast. Exclude prior-year-only reads.
+ if(group?.verified&&Number(group.games)>=3&&Number(group.currentSeasonGames)>=2&&Number.isFinite(group.shotsPerGame)){
+  const role=({C:'centers',LW:'left wings',RW:'right wings',D:'defensemen'})[group.position]||'players in his position';
+  return'<p class="pick-matchup">Against '+esc(p.opponent||group.opponent)+': '+esc(group.shotsPerGame.toFixed(1))+
+   ' shots on goal per game allowed to all '+esc(role)+' combined across '+esc(group.games)+
+   ' completed games. <small>'+esc(Number(group.currentSeasonGames)<5?'Early-season sample; not one player’s expected shots.':'Position total, not one player’s expected shots.')+'</small></p>';
+ }
+ if(!x?.verified||Number(x.currentSeasonGames)<3||!Number.isFinite(x.sogAgainstPerGame))return'';
+ return'<p class="pick-matchup">Matchup: '+esc(p.opponent||x.team)+' has allowed '+esc(x.sogAgainstPerGame.toFixed(1))+' total shots per game at 5-on-5 over its last '+esc(x.games)+' games. <small>Not a position-specific figure.</small></p>';
 }
 function nhlPositionMatchup(p){
  if(String(p?.league||'').toLowerCase()!=='nhl'||String(p.market||p.stat||'').toLowerCase()!=='goals')return'';
