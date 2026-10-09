@@ -444,7 +444,7 @@ async function refreshToday(){
 const rankedCache=new Map();
 async function getRanked(s,d,refresh=false){const k=s+'-'+d,p=rankedCache.get(k);if(!refresh&&p&&Date.now()-p.at<240000)return p.promise;const u='/api/stat-board?view=ranked&league='+encodeURIComponent(s.toLowerCase())+'&date='+encodeURIComponent(d)+(refresh?'&source=live&refresh='+Date.now():'');const promise=fetch(u).then(async r=>{const data=await r.json();if(!r.ok||!data.available)throw Error(data.error||'Model data unavailable');updateSyncStatus(data);return data});rankedCache.set(k,{at:Date.now(),promise});try{return await promise}catch(e){rankedCache.delete(k);throw e}}
 function statSummary(x){return x&&Number.isFinite(x.games)&&x.games>0?x.hits+'/'+x.games+' ('+Math.round(100*x.rate)+'%)':'Not available'}
-function priceTag(p){return p.priced&&Number.isFinite(p.price)?'<div class="edge-price"><b>'+esc(p.book)+' '+esc(amPrice(p.price))+'</b><small>Recorded '+esc(quoteDate(p.observedAt))+'</small></div>':'<div class="edge-price muted-price"><b>No verified price</b><small>Check bookmaker before playing</small></div>'}
+function priceTag(p){return p.priced&&Number.isFinite(p.price)?'<div class="edge-price"><b>'+esc(p.book)+' '+esc(amPrice(p.price))+'</b><small>Recorded '+esc(quoteDate(p.observedAt))+'</small></div>':'<div class="edge-price muted-price"><b>Odds not listed</b><small>Check bookmaker before playing</small></div>'}
 function pickMini(p){
  return '<div class="edge-leg"><div class="edge-legmain"><strong>'+esc(p.player)+'</strong><span>'+esc(p.selection)+'</span></div><div class="edge-legprice">'+
   (p.priced?'<strong>'+esc(amPrice(p.price))+'</strong><small>'+esc(p.book)+'</small>':'<small>Odds not listed</small>')+'</div>'+
