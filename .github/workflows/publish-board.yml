@@ -71,7 +71,7 @@ jobs:
           node-version: '22'
       - name: Verify market math, NHL usage, and fantasy data integrity
         if: steps.window.outputs.allowed == 'true'
-        run: node --test tests/market-and-nhl-opportunity.test.js
+        run: node --test tests/market-and-nhl-opportunity.test.js tests/nhl-possession.test.js
       - name: Collect current picks without building website
         if: steps.window.outputs.allowed == 'true'
         env:
