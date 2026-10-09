@@ -105,3 +105,14 @@ test('Goalscorer card contains source-qualified C/LW/RW/D table without elite la
  assert.ok(h.includes('Goals allowed')||h.includes('goals/game'));
  assert.ok(!h.includes('ELITE'));
 });
+
+
+test('Shots pick uses verified shots allowed to entire position, not goals or personal probability',()=>{
+ const p={...pick,
+  positionShotMatchup:{verified:true,position:'RW',opponent:'SEA',games:3,currentSeasonGames:3,shotsAllowed:30,shotsPerGame:10},
+  opponentPossession:{verified:true,currentSeasonGames:3,games:3,sogAgainstPerGame:22}};
+ const h=app.makePropCard(p,0);
+ assert.ok(h.includes('10.0 shots on goal per game allowed to all right wings combined'));
+ assert.ok(h.includes('Early-season sample'));
+ assert.ok(!h.includes('10.0 goals'));
+});
