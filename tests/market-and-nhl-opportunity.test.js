@@ -12,7 +12,8 @@ test('OddsJam math: fair -110/-110 book is 50/50 with vig',()=>{
 test('Market price versus prediction confidence are separate',()=>{
  near(M.edge(.55,-110).roi,.05);
  assert.equal(M.assessValue(-110,{modelProbability:.90,calibrated:false,modelGames:7}).available,false);
- assert.equal(M.assessValue(-110,{modelProbability:.55,calibrated:true,modelGames:100}).available,true);
+ assert.equal(M.assessValue(-110,{modelProbability:.55,calibrated:true,modelGames:100}).available,false,'a calibrated label alone is not proof');
+ assert.equal(M.assessValue(-110,{modelProbability:.55,calibrated:true,modelGames:250,calibration:{outOfSample:true,marketMatched:true,gradedObservations:250,brierScore:.18}}).available,true);
  const ci=M.wilson(9,10);assert.ok(ci.lower<.7,'9/10 L10 rate is not 90% certain');
 });
 const scope={eventId:'NHL_2026_WSH_NYR',league:'nhl',market:'spreads',period:'full_game',settlement:'full_game_2way'};
