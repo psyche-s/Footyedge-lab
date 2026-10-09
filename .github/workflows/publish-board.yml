@@ -84,4 +84,13 @@ jobs:
               gh release create "$tag" --repo "$GH_REPO" --target main --title "SportsLab data - $upper" --notes-file "$file" --latest=false
               echo "Created first $sport board release"
             fi
+            # Preserve first pregame edition for honest later grading. Later manual/midday refreshes
+            # update the current release but never rewrite the morning evidence.
+            today="$(TZ=America/Toronto date +%Y-%m-%d)"
+            hour="$(TZ=America/Toronto date +%H)"
+            freeze="sportslab-freeze-${sport}-${today}"
+            if [ "$hour" -lt 11 ] && ! gh release view "$freeze" --repo "$GH_REPO" >/dev/null 2>&1; then
+              gh release create "$freeze" --repo "$GH_REPO" --target main --title "Pregame freeze ${today} ${sport^^}" --notes-file "$file" --latest=false
+              echo "Preserved immutable morning ${sport} picks for after-game review"
+            fi
           done
