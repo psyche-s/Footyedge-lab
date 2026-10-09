@@ -11,12 +11,10 @@ async function get(league,view,date,source){if(source==='auto')try{const p=await
 
 function compactPossession(p){
  if(!p?.verified)return p||null;
- return{verified:true,team:p.team,source:p.source,games:p.games,currentSeasonGames:p.currentSeasonGames,
-  priorSeasonGames:p.priorSeasonGames,corsiPct:p.corsiPct,fenwickPct:p.fenwickPct,
-  sogForPerGame:p.sogForPerGame,sogAgainstPerGame:p.sogAgainstPerGame,
-  attemptsForPerGame:p.attemptsForPerGame,attemptsAgainstPerGame:p.attemptsAgainstPerGame,
-  innerSlotLocationProxyPerGame:p.innerSlotLocationProxyPerGame,pdo:p.pdo,
-  lastGameDate:p.lastGameDate,rapm:p.rapm?.available?{available:true}: {available:false}};
+ return{verified:true,team:p.team,games:p.games,currentSeasonGames:p.currentSeasonGames,
+  corsiPct:p.corsiPct,fenwickPct:p.fenwickPct,sogForPerGame:p.sogForPerGame,
+  sogAgainstPerGame:p.sogAgainstPerGame,innerSlotLocationProxyPerGame:p.innerSlotLocationProxyPerGame,
+  pdo:p.pdo};
 }
 function compactPick(p){
  const q={...p};
@@ -41,7 +39,14 @@ function compactTrack(p){
 }
 function compactParlay(p){return{...p,legs:(p.legs||[]).map(compactLeg)}}
 function compact(p,view){const c={available:true,league:p.league,date:p.date,fallback:!!p.fallback,sources:(p.sources||[]).slice(0,8),warnings:(p.warnings||[]).slice(0,8),modelStatus:p.modelStatus||null,coverage:p.coverage||null,fetchedAt:p.fetchedAt||null,dataMode:'published'};if(view==='ranked')return{...c,props:(p.props||[]).slice(0,10).map(compactPick),candidateProps:[],sgps:(p.sgps||[]).slice(0,3).map(compactParlay),crossGameParlay:p.crossGameParlay?.available?compactParlay(p.crossGameParlay):(p.crossGameParlay||{available:false,legs:[],reason:'Not verified'}),pricedProps:p.pricedProps||0,candidatesEvaluated:p.candidatesEvaluated??(p.props||[]).length};const groups=(p.groups||[]).map(g=>({key:g.key,title:g.title,stat:g.stat,selection:g.selection,picks:(g.picks||[]).slice(0,5).map(compactPick)}));return{...c,groups,scorers:groups.flatMap(g=>g.picks).map(compactTrack)}}
-async function compose(league,date,source){const types=['ranked','scorers'],parts={},responses=await Promise.allSettled(types.map(v=>get(league,v,date,source)));for(let i=0;i<types.length;i++)if(responses[i].status==='fulfilled')parts[types[i]]=compact(responses[i].value,types[i]);if(!Object.keys(parts).length)throw Error('No verified data: '+responses.map(r=>r.reason?.message||'unavailable').join(' | '));const publishedAt=new Date().toISOString(),data={schemaVersion:1,league,date,publishedAt,publisher:'GitHub Actions data-only, no Vercel build',views:Object.keys(parts),...parts};let json=JSON.stringify(data);if(Buffer.byteLength(json)>110000&&data.ranked){data.ranked.candidateProps=[];json=JSON.stringify(data)}if(Buffer.byteLength(json)>110000)throw Error('Board still too large for publication: '+Buffer.byteLength(json)+' bytes');return{json,summary:{league,date,publishedAt,views:data.views,props:data.ranked?.props?.length||0,sgps:data.ranked?.sgps?.length||0,scorers:data.scorers?.scorers?.length||0,bytes:Buffer.byteLength(json)}}}
+async function compose(league,date,source){const types=['ranked','scorers'],parts={},responses=await Promise.allSettled(types.map(v=>get(league,v,date,source)));for(let i=0;i<types.length;i++)if(responses[i].status==='fulfilled')parts[types[i]]=compact(responses[i].value,types[i]);if(!Object.keys(parts).length)throw Error('No verified data: '+responses.map(r=>r.reason?.message||'unavailable').join(' | '));const publishedAt=new Date().toISOString(),data={schemaVersion:1,league,date,publishedAt,publisher:'GitHub Actions data-only, no Vercel build',views:Object.keys(parts),...parts};let json=JSON.stringify(data);if(Buffer.byteLength(json)>110000&&data.ranked){
+  data.ranked.candidateProps=[];
+  // Preserve original price, market and Top10 interactive graphs; SGP legs
+  // retain L5/L10 summary, but shed detailed H2H arrays if still oversized.
+  for(const sgp of data.ranked.sgps||[])for(const leg of sgp.legs||[])if(leg.h2h)leg.h2h={summary:leg.h2h.summary};
+  for(const leg of data.ranked.crossGameParlay?.legs||[])if(leg.h2h)leg.h2h={summary:leg.h2h.summary};
+  json=JSON.stringify(data)
+ }if(Buffer.byteLength(json)>110000)throw Error('Board still too large for publication: '+Buffer.byteLength(json)+' bytes');return{json,summary:{league,date,publishedAt,views:data.views,props:data.ranked?.props?.length||0,sgps:data.ranked?.sgps?.length||0,scorers:data.scorers?.scorers?.length||0,bytes:Buffer.byteLength(json)}}}
 async function main(){const{league,date,source,preview}=inputs();if(!['all',...SPORTS].includes(league)||!['auto','free'].includes(source)||!/^20\d\d-\d\d-\d\d$/.test(date))throw Error('Invalid sport/source/date');if(date!==torontoDate())throw Error('Cannot publish stale date: '+date+'; today '+torontoDate());await fs.mkdir(DIR,{recursive:true});const targets=league==='all'?SPORTS:[league];let success=0;for(const x of targets)try{const p=await compose(x,date,source);if(!preview)await fs.writeFile(path.join(DIR,x+'.json'),p.json,'utf8');console.log('[ready] '+JSON.stringify(p.summary));success++}catch(e){console.error('[not published] '+x+': '+e.message)}if(!success)throw Error('Nothing qualified. Existing publications remain untouched.');console.log('[complete] '+success+'/'+targets.length+' boards prepared without Vercel deploy')}
 if(require.main===module)main().catch(e=>{console.error('[failed] '+e.message);process.exitCode=1});
 module.exports={torontoDate,inputs,valid,compact,compose,main};
