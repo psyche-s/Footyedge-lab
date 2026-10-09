@@ -270,6 +270,18 @@ body{background:#0d0e10}
 .nhl-usage small{color:#a7b5c2;font-size:10px;line-height:1.55}
 @media(max-width:480px){.nhl-usage-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
+
+.nhl-pbp-box{border:1px solid rgba(151,186,172,.21);background:rgba(133,181,152,.07);border-radius:10px;margin:10px 0}
+.nhl-pbp-box>summary{cursor:pointer;padding:11px 12px;font-size:11px;color:#bfdcc9;font-weight:800;line-height:1.4}
+.nhl-pbp-inner{padding:0 11px 11px}
+.nhl-pbp-team{padding:11px 2px;border-top:1px solid rgba(168,195,179,.15);display:grid;gap:7px}
+.nhl-pbp-team>b{font-size:11px;color:#e2eae6}
+.nhl-pbp-team>small{font-size:10px;color:#a3b4ae}
+.nhl-pbp-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.nhl-pbp-metrics>span{display:flex;justify-content:space-between;gap:6px;align-items:center;background:rgba(144,184,159,.06);padding:9px 7px;border-radius:7px;font-size:10px;color:#aeb9b8}
+.nhl-pbp-metrics strong{font-variant-numeric:tabular-nums;color:#c4e2d0}
+.nhl-pbp-inner .tiny{line-height:1.5;color:#aab8b1;margin-top:9px}
+
 </style></head>
 <body><header class="head"><div class="headin wrap"><div><div class="brand">Sports<em>Lab</em></div><div class="subbrand">Sports intelligence</div></div><span class="status">● &nbsp; FREE DATA</span></div></header>
 <main class="wrap"><div class="sportbar" id="sports"><button class="sport active" data-s="NHL"><span class="emoji">🏒</span>NHL</button><button class="sport" data-s="NFL"><span class="emoji">🏈</span>NFL</button><button class="sport" data-s="MLB"><span class="emoji">⚾</span>MLB</button></div>
@@ -303,7 +315,7 @@ async function getScoring(s,date,refresh=false){
 }
 function scoringPickCard(p,i){
   const label={goals:'Goals',assists:'Assists','receiving.td':'Receiving touchdowns','rushing.td':'Rushing touchdowns','batting.hr':'Home runs',sog:'Shots on goal',targets:'Targets','rushing.att':'Rushing attempts',pa:'Plate appearances'};
-  return '<article class="edge-card scorer-card"><div class="edge-cardtop"><div class="edge-rank">'+esc(i+1)+'</div><div class="edge-player"><strong>'+esc(p.player)+'</strong><span class="edge-vs">'+esc(p.team||'Team unverified')+' vs '+esc(p.opponent||'Opponent unverified')+'</span></div>'+priceTag(p)+'</div><div class="edge-selection">'+esc(p.selection)+'</div><div class="scorer-trend">'+[['L5',p.last5],['L10',p.last10],['Season',p.season]].map(([name,r])=>'<span><b>'+esc(name)+'</b>'+esc(statSummary(r))+'</span>').join('')+'</div>'+formAvailabilityMarkup(p)+'<div class="scorer-reading"><span><b>Average:</b> '+esc(Number.isFinite(p.average)?p.average.toFixed(2):'—')+' '+esc(label[p.stat]||p.stat)+' / game</span><span><b>Opportunity:</b> '+esc(p.opportunity?.verified?Number(p.opportunity.last10Average).toFixed(1)+' '+(label[p.opportunity.stat]||p.opportunity.stat)+' per game':'Not verified')+'</span></div><details class="edge-details"><summary>Why this scorer? <span>Evidence & risk</span></summary><p>Observed last-10 hit rate '+esc(statSummary(p.last10))+'. '+esc(p.sampleNote||'')+'. '+esc(p.availability?.risk||'No confirmed starting role supplied.')+'.</p><p>'+esc(p.priced?'Individual '+p.book+' price recorded '+quoteDate(p.observedAt)+'.':'No verified bet365, DraftKings or FanDuel price.')+' Scoring events are volatile. Observed historical rates are not calibrated predictions.</p></details>'+researchRisk(p)+nhlUsageMarkup(p)+propBreakdownMarkup(p)+'</article>';
+  return '<article class="edge-card scorer-card"><div class="edge-cardtop"><div class="edge-rank">'+esc(i+1)+'</div><div class="edge-player"><strong>'+esc(p.player)+'</strong><span class="edge-vs">'+esc(p.team||'Team unverified')+' vs '+esc(p.opponent||'Opponent unverified')+'</span></div>'+priceTag(p)+'</div><div class="edge-selection">'+esc(p.selection)+'</div><div class="scorer-trend">'+[['L5',p.last5],['L10',p.last10],['Season',p.season]].map(([name,r])=>'<span><b>'+esc(name)+'</b>'+esc(statSummary(r))+'</span>').join('')+'</div>'+formAvailabilityMarkup(p)+'<div class="scorer-reading"><span><b>Average:</b> '+esc(Number.isFinite(p.average)?p.average.toFixed(2):'—')+' '+esc(label[p.stat]||p.stat)+' / game</span><span><b>Opportunity:</b> '+esc(p.opportunity?.verified?Number(p.opportunity.last10Average).toFixed(1)+' '+(label[p.opportunity.stat]||p.opportunity.stat)+' per game':'Not verified')+'</span></div><details class="edge-details"><summary>Why this scorer? <span>Evidence & risk</span></summary><p>Observed last-10 hit rate '+esc(statSummary(p.last10))+'. '+esc(p.sampleNote||'')+'. '+esc(p.availability?.risk||'No confirmed starting role supplied.')+'.</p><p>'+esc(p.priced?'Individual '+p.book+' price recorded '+quoteDate(p.observedAt)+'.':'No verified bet365, DraftKings or FanDuel price.')+' Scoring events are volatile. Observed historical rates are not calibrated predictions.</p></details>'+researchRisk(p)+nhlUsageMarkup(p)+nhlPossessionMarkup(p)+propBreakdownMarkup(p)+'</article>';
 }
 async function loadScoringBoard(selectedSport,date,refresh=false){
   const box=document.getElementById('scorerboard');if(!box)return;
@@ -368,6 +380,29 @@ function pickMini(p){return '<div class="edge-leg"><div class="edge-legmain"><st
 function shortOddsNote(x){return x.priced?'Exact listed quote; check freshness before placing a bet.':'Model line for research only — bet365 / DraftKings / FanDuel price not found.'}
 
 
+
+function nhlPossessionMarkup(p){
+  if(String(p?.league||'').toLowerCase()!=='nhl')return'';
+  const t=p.teamPossession,o=p.opponentPossession;
+  if(!t?.verified&&!o?.verified)return'';
+  const fmt=x=>Number.isFinite(x)?x.toFixed(1):'—';
+  const pct=x=>Number.isFinite(x)?(x*100).toFixed(1)+'%':'—';
+  const team=String(p.team||'Our team'),opponent=String(p.opponent||'Opponent');
+  const row=(label,piece,who)=>{
+    if(!piece?.verified)return'';
+    return '<div class="nhl-pbp-team"><b>'+esc(label)+'</b>'+
+     '<div class="nhl-pbp-metrics"><span>CF% <strong>'+esc(pct(piece.corsiPct))+'</strong></span>'+
+     '<span>FF% <strong>'+esc(pct(piece.fenwickPct))+'</strong></span>'+
+     '<span>5v5 SOG against <strong>'+esc(fmt(piece.sogAgainstPerGame))+'/game</strong></span>'+
+     '<span>Slot-area attempt proxy <strong>'+esc(fmt(piece.innerSlotLocationProxyPerGame))+'/game</strong></span></div>'+
+     '<small>'+esc(piece.games)+' prior completed games · '+esc(piece.currentSeasonGames)+' from the current season</small></div>';
+  };
+  return '<details class="nhl-pbp-box"><summary>Verified 5v5 possession &amp; opponent shot environment</summary>'+
+   '<div class="nhl-pbp-inner">'+row(team,t,true)+row(opponent,o,false)+
+   '<p class="tiny">Official NHL 5v5 play-by-play. CF% = all shot attempts; FF% = unblocked attempts. Shot counts are 5v5 only, not full-game saves or SOG. The slot-area count is a geometric location proxy, not official high-danger chances or expected goals. Early-season samples may include a prior season.</p>'+
+   '<p class="tiny"><strong>RAPM:</strong> Not yet trained on validated complete on-ice stints. No RAPM or xG rating is invented. PDO is not an automatic betting signal.</p></div></details>';
+}
+
 function nhlUsageMarkup(p){
   const u=p?.usage;
   if(!u?.verified)return'';
@@ -389,7 +424,7 @@ function researchRisk(p){
   return '<div class="research-risk"><strong>Evidence '+esc(q.score)+'/95</strong><span>Not win probability · '+esc(q.readiness||'research')+'</span>'+(explain?'<small>'+esc(explain)+'</small>':'')+'</div>';
 }
 
-function makePropCard(p,i){const sample=p.last10?.games||0;return '<article class="edge-card prop-result"><div class="edge-cardtop"><div class="edge-rank">'+(i+1)+'</div><div class="edge-player"><strong>'+esc(p.player)+'</strong><span class="edge-vs">'+esc(p.game||[p.team,p.opponent].filter(Boolean).join(' vs '))+'</span></div>'+priceTag(p)+'</div><div class="edge-selection">'+esc(p.selection)+'</div><div class="edge-stats"><span><b>L5</b>'+esc(statSummary(p.last5))+'</span><span><b>L10</b>'+esc(statSummary(p.last10))+'</span><span><b>Average</b>'+esc(Number.isFinite(p.average)?Number(p.average).toFixed(1):'—')+'</span></div><details class="edge-details"><summary>Why this pick? <span>View evidence</span></summary><p>Observed hit rate for the displayed line: '+esc(statSummary(p.last10))+'. Average across recorded games: '+esc(Number.isFinite(p.average)?Number(p.average).toFixed(2):'not available')+'. '+esc(p.sampleNote||'')+'.</p><p>'+esc(shortOddsNote(p))+' Verified opponent-position allowance, H2H floors and playing role contribute only when available. Unverified factors are marked as risks, not invented confidence.</p></details>'+formAvailabilityMarkup(p)+researchRisk(p)+nhlUsageMarkup(p)+propBreakdownMarkup(p)+'</article>'}
+function makePropCard(p,i){const sample=p.last10?.games||0;return '<article class="edge-card prop-result"><div class="edge-cardtop"><div class="edge-rank">'+(i+1)+'</div><div class="edge-player"><strong>'+esc(p.player)+'</strong><span class="edge-vs">'+esc(p.game||[p.team,p.opponent].filter(Boolean).join(' vs '))+'</span></div>'+priceTag(p)+'</div><div class="edge-selection">'+esc(p.selection)+'</div><div class="edge-stats"><span><b>L5</b>'+esc(statSummary(p.last5))+'</span><span><b>L10</b>'+esc(statSummary(p.last10))+'</span><span><b>Average</b>'+esc(Number.isFinite(p.average)?Number(p.average).toFixed(1):'—')+'</span></div><details class="edge-details"><summary>Why this pick? <span>View evidence</span></summary><p>Observed hit rate for the displayed line: '+esc(statSummary(p.last10))+'. Average across recorded games: '+esc(Number.isFinite(p.average)?Number(p.average).toFixed(2):'not available')+'. '+esc(p.sampleNote||'')+'.</p><p>'+esc(shortOddsNote(p))+' Verified opponent-position allowance, H2H floors and playing role contribute only when available. Unverified factors are marked as risks, not invented confidence.</p></details>'+formAvailabilityMarkup(p)+researchRisk(p)+nhlUsageMarkup(p)+nhlPossessionMarkup(p)+propBreakdownMarkup(p)+'</article>'}
 
 
 function teamH2HMarkup(p){
