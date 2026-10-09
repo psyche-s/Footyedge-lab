@@ -1,3 +1,4 @@
+const EVOLUTION=require('../lib/model-quality');
 
 /**
  * Public read-only GitHub Release snapshot. Releases are edited by an
@@ -335,6 +336,7 @@ async function scoringSlate(req,res,key,league,date){
       p.price=quote.price;p.book=quote.book;p.priced=true;p.observedAt=quote.observedAt;p.gameId=quote.gameId;
     }
   }catch(e){warnings.push('Verified scorer market prices could not be fully retrieved; research lines are not sportsbook offers.')}
+  EVOLUTION.applyQuality(scoring,()=>({formPreviouslyWeighted:true,postseason:league==='mlb'}));
   scoring.sort((a,b)=>b.evidenceScore-a.evidenceScore||(b.last10?.games||0)-(a.last10?.games||0));
   let groups=markets.map(m=>{
     const candidates=scoring.filter(p=>p.marketKey===m.key),unique=[],seen=new Set(),teamCount=new Map();
@@ -461,12 +463,13 @@ async function rankedSlate(req,res,key,league,date){
   if(league==='mlb'&&!props.length)warnings.push('No verified starting-pitcher props passed the research filters today.');
   formTrend(props);
   await applyRosterAvailability(props,league,key,fetchData,warnings,nflTeamIds);
+  EVOLUTION.applyQuality(props,()=>({formPreviouslyWeighted:true,postseason:league==='mlb'}));
   props.sort((a,b)=>b.evidenceScore-a.evidenceScore||(b.last10?.games||0)-(a.last10?.games||0));
   const picked=[],seen=new Set();for(const p of props){if(!seen.has(p.personId)){picked.push(p);seen.add(p.personId)}if(picked.length===10)break}
   const groups=new Map();
   for(const p of props){const game=p.gameId||[p.team,p.opponent].filter(Boolean).sort().join('|');if(!game)continue;if(!groups.has(game))groups.set(game,[]);groups.get(game).push(p)}
   const sgps=[];
-  for(const [gid,entries] of groups){const sorted=entries.filter(x=>x.last10&&x.last10.games>=3&&x.last10.rate>=.65).sort((a,b)=>b.evidenceScore-a.evidenceScore);const unique=[],ids=new Set();for(const p of sorted){if(ids.has(p.personId))continue;ids.add(p.personId);unique.push(p);if(unique.length>=5)break}if(unique.length<3)continue;const legs=unique.slice(0,Math.min(5,unique.length));sgps.push({game:legs[0].game,gameId:legs[0].gameId||null,legs,legCount:legs.length,combinedPrice:null,book:legs.every(x=>x.book===legs[0].book)?legs[0].book:null,pricedLegs:legs.filter(x=>x.priced).length,rankScore:Math.round(legs.reduce((a,b)=>a+b.evidenceScore,0)/legs.length),status:'Research combination — SGP-specific combined odds and correlation not verified',notes:legs.some(x=>x.last10.games<5)?'Early-season data: do not interpret observed rates as future success probability.':'Correlation, lineup availability and combined payout still require bookmaker confirmation.'})}
+  for(const [gid,entries] of groups){const sorted=entries.filter(x=>x.last10&&x.last10.games>=5&&x.last10.rate>=.65&&x.quality?.score>=54&&x.quality.readiness!=='exclude').sort((a,b)=>b.evidenceScore-a.evidenceScore);const unique=[],ids=new Set();for(const p of sorted){if(ids.has(p.personId))continue;ids.add(p.personId);unique.push(p);if(unique.length>=5)break}if(unique.length<3)continue;const legs=unique.slice(0,Math.min(5,unique.length));const risk=EVOLUTION.sgpQuality(legs);if(risk.readiness==='exclude')continue;sgps.push({game:legs[0].game,gameId:legs[0].gameId||null,legs,legCount:legs.length,combinedPrice:null,book:legs.every(x=>x.book===legs[0].book)?legs[0].book:null,pricedLegs:legs.filter(x=>x.priced).length,rankScore:risk.score,sgpRisk:risk,status:'Research combination — correlated outcomes and combined odds are not verified',notes:risk.flags.includes('three_plus_legs_same_team')?'Multiple legs rely on the same team game script; review line/PP/usage assumptions.':'Same-game correlations, lineup availability and accepted sportsbook payout must still be checked.'})}
   sgps.sort((a,b)=>b.rankScore-a.rankScore);
   if(!props.length)return FREE_SLATE(req,res,{reason:'Primary player-prop board unavailable or lacks qualifying samples'});
   const crossGameParlay=await buildCrossGameParlay({league,date,props:props.slice(0,45),hawkKey:key,warnings});
