@@ -312,6 +312,12 @@ body{background:#0d0e10}
 .pos-player-row small{font-weight:400;font-size:9px;color:#9db1a5}
 .pos-match-inner .tiny{font-size:10px;line-height:1.55;margin-top:10px;color:#a7b5bd}
 
+
+.nhl-shot-context{display:flex;flex-direction:column;gap:5px;padding:10px 12px;margin:11px 0;background:rgba(150,180,188,.08);border:1px solid rgba(157,177,190,.18);border-radius:9px;line-height:1.4;font-size:11px}
+.nhl-shot-context strong{font-size:10px;color:#d5e2e3}
+.nhl-shot-context span{color:#bdccd0}
+.nhl-shot-context small{color:#a3b1bb;font-size:10px;line-height:1.45}
+
 </style></head>
 <body><header class="head"><div class="headin wrap"><div><div class="brand">Sports<em>Lab</em></div><div class="subbrand">Sports intelligence</div></div><span class="status">● &nbsp; FREE DATA</span></div></header>
 <main class="wrap"><div class="sportbar" id="sports"><button class="sport active" data-s="NHL"><span class="emoji">🏒</span>NHL</button><button class="sport" data-s="NFL"><span class="emoji">🏈</span>NFL</button><button class="sport" data-s="MLB"><span class="emoji">⚾</span>MLB</button></div>
@@ -406,6 +412,14 @@ function pickSafetyNote(p){
  else if(flags.includes('role_volume_not_verified')&&String(p.league||'').toLowerCase()==='nhl'&&
   ['goals','assists','pts'].includes(String(p.market||'')))note='Check tonight’s line and power-play role.';
  return note?'<p class="plain-risk">'+esc(note)+'</p>':'';
+}
+
+
+function nhlOpponentShotContext(p){
+ const x=p.opponentPossession,market=String(p.market||p.stat||'').toLowerCase();
+ if(String(p.league||'').toLowerCase()!=='nhl'||!['sog','shots'].includes(market)||!x?.verified)return'';
+ const fmt=n=>typeof n==='number'&&Number.isFinite(n)?n.toFixed(1):'—';
+ return'<div class="nhl-shot-context"><strong>Opponent shot environment</strong><span>'+esc(p.opponent||x.team)+' has allowed '+esc(fmt(x.sogAgainstPerGame))+' shots on goal per game at <b>5-on-5</b> over '+esc(x.games)+' verified games.</span><small>Team-level shots, not shots allowed to this player’s exact position. '+(x.currentSeasonGames<5?'Small early-season sample; interpret cautiously.':'')+' Power-play chances are excluded from this figure.</small></div>';
 }
 
 function nhlPositionMatchup(p){
@@ -515,7 +529,7 @@ function makePropCard(p,i){
  return '<article class="edge-card prop-result"><div class="edge-cardtop"><div class="edge-rank">'+(i+1)+'</div><div class="edge-player"><strong>'+esc(p.player)+'</strong><span class="edge-vs">'+esc(p.game||[p.team,p.opponent].filter(Boolean).join(' vs '))+'</span></div>'+priceTag(p)+'</div>'+
  '<div class="edge-selection">'+esc(p.selection)+'</div>'+
  '<div class="edge-stats"><span><b>Last 5</b>'+esc(statSummary(p.last5))+'</span><span><b>Last 10</b>'+esc(statSummary(p.last10))+'</span><span><b>Average</b>'+esc(Number.isFinite(p.average)?Number(p.average).toFixed(1):'—')+'</span></div>'+
- plainWhyMarkup(p)+visibleFormAndH2H(p)+nhlPositionMatchup(p)+propBreakdownMarkup(p)+'</article>';
+ plainWhyMarkup(p)+visibleFormAndH2H(p)+nhlOpponentShotContext(p)+nhlPositionMatchup(p)+propBreakdownMarkup(p)+'</article>';
 }
 
 function teamH2HMarkup(p){
