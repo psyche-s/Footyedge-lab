@@ -17,6 +17,8 @@ on:
         default: auto
   schedule:
     - cron: '10 11,12,17,18 * * *'
+    # Friday October 9, 2026 at 4:00 PM America/Toronto (20:00 UTC), three hours before NHL 7 PM ET puck drop.
+    - cron: '0 20 9 10 *'
 
 permissions:
   contents: write
@@ -38,10 +40,23 @@ jobs:
         run: |
           if [ "$EVENT" = "workflow_dispatch" ]; then
             echo "allowed=true" >> "$GITHUB_OUTPUT"
+            echo "league=all" >> "$GITHUB_OUTPUT"
           else
+            today="$(TZ=America/Toronto date +%Y-%m-%d)"
             hour="$(TZ=America/Toronto date +%H)"
-            if [ "$hour" = "07" ] || [ "$hour" = "13" ]; then
+            # Friday's 7 PM NHL game is the earliest; publish the whole NHL slate at 4 PM.
+            # Do not publish at the usual 7 AM/1 PM slots on this date.
+            if [ "$today" = "2026-10-09" ]; then
+              if [ "$hour" = "16" ]; then
+                echo "allowed=true" >> "$GITHUB_OUTPUT"
+                echo "league=nhl" >> "$GITHUB_OUTPUT"
+                echo "Friday NHL pregame publication at 4 PM ET"
+              else
+                echo "allowed=false" >> "$GITHUB_OUTPUT"
+              fi
+            elif [ "$hour" = "07" ] || [ "$hour" = "13" ]; then
               echo "allowed=true" >> "$GITHUB_OUTPUT"
+              echo "league=all" >> "$GITHUB_OUTPUT"
             else
               echo "allowed=false" >> "$GITHUB_OUTPUT"
             fi
@@ -57,7 +72,7 @@ jobs:
       - name: Collect current picks without building website
         if: steps.window.outputs.allowed == 'true'
         env:
-          INPUT_LEAGUE: ${{ inputs.league || 'all' }}
+          INPUT_LEAGUE: ${{ github.event_name == 'workflow_dispatch' && inputs.league || steps.window.outputs.league }}
           INPUT_SOURCE: ${{ inputs.source || 'auto' }}
         run: node scripts/publish-board.js
       - name: Publish board data in Releases without code commit
@@ -89,7 +104,7 @@ jobs:
             today="$(TZ=America/Toronto date +%Y-%m-%d)"
             hour="$(TZ=America/Toronto date +%H)"
             freeze="sportslab-freeze-${sport}-${today}"
-            if [ "$hour" -lt 11 ] && ! gh release view "$freeze" --repo "$GH_REPO" >/dev/null 2>&1; then
+            if { [ "$hour" -lt 11 ] || { [ "$today" = "2026-10-09" ] && [ "$hour" = "16" ] && [ "$sport" = "nhl" ]; }; } && ! gh release view "$freeze" --repo "$GH_REPO" >/dev/null 2>&1; then
               gh release create "$freeze" --repo "$GH_REPO" --target main --title "Pregame freeze ${today} ${sport^^}" --notes-file "$file" --latest=false
               echo "Preserved immutable morning ${sport} picks for after-game review"
             fi
