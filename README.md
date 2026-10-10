@@ -1,6 +1,6 @@
 # SportsLab
 
-Free-only research application for **NHL, NFL, MLB**. Soccer belongs to the separate original FootyEdge project.
+Free-only research application for **NHL, NFL, MLB, NBA**. Soccer belongs to the separate original FootyEdge project.
 
 ## App
 
@@ -11,6 +11,7 @@ Static mobile-first dashboard in `index.html` with sport tabs, Top 3 SGPs, Top 1
 - NHL: NHL public game, roster, play-by-play, and shot-event feeds; compute shot attempts, shots on goal, ice time and player usage where available.
 - NFL: public game/roster/box-score data; historical play-by-play through publicly available open datasets where permitted; calculate routes/targets only when available and correctly sourced.
 - MLB: MLB Stats API for schedules, box scores, probable pitchers, lineups, play-by-play and splits; weather from free public weather sources.
+- NBA: ESPN public NBA regular-season roster and player game logs, with NBA live/box-score endpoints documented by the open-source `swar/nba_api` project. Preseason and postseason excluded from regular-season prop hit rates. No confirmed starting minutes, injuries or sportsbook odds inferred.
 - Odds: **no assumption that free live prop odds or same-game parlay prices exist**. Display verified prices only with provider, captured timestamp, market and line; otherwise mark unavailable. Do not infer SGP odds by multiplying correlated legs.
 
 ## Selection rules
