@@ -1,7 +1,7 @@
 'use strict';
 // Manual/scheduled owner publishing: GitHub Release body update, never a Vercel deploy.
 const fs=require('node:fs/promises'),path=require('node:path'),freeSlate=require('../lib/free-slate');
-const SPORTS=['nhl','nfl','mlb'],DIR=path.join(process.cwd(),'published');
+const SPORTS=['nhl','nfl','mlb','nba'],DIR=path.join(process.cwd(),'published');
 function torontoDate(value=new Date()){const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'America/Toronto',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(value).map(x=>[x.type,x.value]));return p.year+'-'+p.month+'-'+p.day}
 function inputs(){const a=process.argv.slice(2),v=n=>a.find(x=>x.startsWith('--'+n+'='))?.slice(n.length+3);return{league:(v('league')||process.env.INPUT_LEAGUE||'all').toLowerCase(),source:(v('source')||process.env.INPUT_SOURCE||'auto').toLowerCase(),date:v('date')||torontoDate(),preview:a.includes('--preview')}}
 function valid(board,view,league,date){return board?.available===true&&board.league===league&&board.date===date&&(view==='ranked'?Array.isArray(board.props)&&(board.props.length>0||(board.sgps||[]).length>0):Array.isArray(board.groups)&&board.groups.some(x=>(x.picks||[]).length))}
