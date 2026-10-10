@@ -7,7 +7,7 @@ on:
         description: Sport to review from its pregame frozen snapshot
         type: choice
         required: true
-        options: [all, nhl, nfl, mlb]
+        options: [all, nhl, nfl, mlb, nba]
         default: all
       date:
         description: Date YYYY-MM-DD (blank means yesterday in Toronto)
@@ -61,7 +61,7 @@ jobs:
             date="$(TZ=America/Toronto date -d 'yesterday' +%Y-%m-%d)"
           fi
           [[ "$date" =~ ^20[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]] || { echo "::error::Invalid date"; exit 1; }
-          for sport in nhl nfl mlb; do
+          for sport in nhl nfl mlb nba; do
             if [ "$INPUT_LEAGUE" != "all" ] && [ "$INPUT_LEAGUE" != "$sport" ]; then
               continue
             fi

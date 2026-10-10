@@ -1,0 +1,37 @@
+name: Verify Free NBA Research
+on:
+  push:
+    branches: [main, feature/free-nba-api-pipeline-20261010]
+    paths:
+      - 'lib/free-nba.js'
+      - 'lib/free-slate.js'
+      - 'lib/free-core.js'
+      - 'api/stat-board.js'
+      - 'api/games.js'
+      - 'scripts/review-board.js'
+      - 'index.html'
+      - 'tests/nba-free.test.js'
+  pull_request:
+    paths:
+      - 'lib/free-nba.js'
+      - 'lib/free-slate.js'
+      - 'lib/free-core.js'
+      - 'api/stat-board.js'
+      - 'tests/nba-free.test.js'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check lib/free-nba.js && node --check lib/free-slate.js && node --check api/stat-board.js
+      - run: node --test tests/nba-free.test.js
+      - name: Probe live public NBA feed
+        run: |
+          node -e "const n=require('./lib/free-nba');const d=new Date();const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'America/Toronto',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d).map(x=>[x.type,x.value]));n.run(parts.year+'-'+parts.month+'-'+parts.day).then(p=>{if(p.league!=='nba'||!Array.isArray(p.entries))process.exitCode=1;console.log('NBA source reached; games:',p.games,'players:',p.playersMatched,'entries:',p.entries.length)}).catch(e=>{console.error('NBA upstream unreachable:',e.message);process.exitCode=1})"

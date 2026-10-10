@@ -118,6 +118,30 @@ async function mlb(date){
  }
  return{games,players,issues,source:'MLB official schedule and full box score',final:games.filter(g=>g.status==='final').length,total:games.length};
 }
+async function nba(date){
+ const board=await data('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates='+date.replace(/-/g,'')+'&limit=100');
+ const games=[],players=[],issues=[];
+ for(const e of board.events||[]){
+  if(Number(e.season?.type)!==2)continue; // Regular-season NBA only.
+  const c=e.competitions?.[0]||{},home=c.competitors?.find(x=>x.homeAway==='home'),away=c.competitors?.find(x=>x.homeAway==='away');
+  if(!home||!away)continue;
+  const final=e.status?.type?.completed===true;
+  games.push(gameResult(e.id,home.team?.displayName,away.team?.displayName,home.score,away.score,final?'final':'pending','ESPN public NBA scoreboard'));
+  if(!final)continue;
+  try{
+   const box=await data('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event='+e.id);
+   for(const team of box.boxscore?.players||[])for(const group of team.statistics||[])for(const player of group.athletes||[]){
+    const who=player.athlete||{},stats=Object.fromEntries((group.labels||[]).map((label,i)=>[String(label||'').toUpperCase(),player.stats?.[i]]));
+    const threes=finite(stats['3PM']??stats['3PTM']??stats.FG3M);
+    const split=String(stats['3PT']||'').match(/^(\d+)-\d+$/);
+    for(const[k,v]of Object.entries({points:stats.PTS,rebounds:stats.REB,assists:stats.AST,threes:threes===null?(split?Number(split[1]):null):threes}))
+     push(players,e.id,who.id,who.displayName||who.fullName,k,v);
+   }
+  }catch(e2){issues.push('NBA individual box score unavailable for game '+e.id)}
+ }
+ return{games,players,issues,source:'ESPN public NBA regular-season final box scores',final:games.filter(x=>x.status==='final').length,total:games.length};
+}
+
 function warningsFor(day){
  const summary=day.summary||{},gameCount=day.sourceTotals||{},notes=[];
  if(summary.graded<10)notes.push('Low graded-pick sample. Do not change historical win-probability weights from this report alone.');
@@ -126,9 +150,9 @@ function warningsFor(day){
  return notes;
 }
 async function review(snapshot){
- if(snapshot?.schemaVersion!==1||!['nhl','nfl','mlb'].includes(snapshot.league)||!/^20\d{2}-\d\d-\d\d$/.test(snapshot.date)||!snapshot.publishedAt)
+ if(snapshot?.schemaVersion!==1||!['nhl','nfl','mlb','nba'].includes(snapshot.league)||!/^20\d{2}-\d\d-\d\d$/.test(snapshot.date)||!snapshot.publishedAt)
   throw Error('A dated original pregame freeze is required for historical grading');
- const mode={nhl,nfl,mlb}[snapshot.league],source=await mode(snapshot.date);
+ const mode={nhl,nfl,mlb,nba}[snapshot.league],source=await mode(snapshot.date);
  const reviewed=REVIEW.reviewSelections(snapshot,source.games,source.players);
  const processWarnings=warningsFor({...reviewed,sourceTotals:{final:source.final,total:source.total}});
  return{schemaVersion:1,league:snapshot.league,date:snapshot.date,pregameFreezeAt:snapshot.publishedAt,reviewedAt:new Date().toISOString(),source:source.source,

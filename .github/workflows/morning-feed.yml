@@ -18,7 +18,7 @@ jobs:
             exit 0
           fi
           day="$(date +%F)"
-          for sport in NHL NFL MLB; do
+          for sport in NHL NFL MLB NBA; do
             curl --fail --silent --show-error --max-time 25 "https://footyedge-lab-psyche8.vercel.app/api/games?sport=${sport}&date=${day}" >/dev/null || true
           done
           echo "Requested scoreboard cache refresh for $day"

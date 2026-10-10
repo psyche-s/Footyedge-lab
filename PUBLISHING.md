@@ -4,21 +4,22 @@ SportsLab separates **reading fresh statistics**, **publishing the daily picks b
 
 ## On the website (once the new code is deployed)
 
-- **Refresh Stats** fetches current NHL/NFL/MLB research for the selected sport immediately, bypassing the published snapshot. This updates your current screen; **it does not publish changes to everyone** and requires no Vercel build.
-- **Publish Picks ↗** opens the authenticated GitHub Actions workflow at [Publish SportsLab Picks](https://github.com/psyche-s/SportsLab/actions/workflows/publish-board.yml). As the repository owner, choose **Run workflow**, choose **all / nhl / nfl / mlb** and **auto** or **free**, and choose **Run workflow** again. The workflow calculates validated daily boards and updates the existing stable public release for each sport. There is no new website build, and no GitHub source-code commit.
+- **Refresh Stats** fetches current NHL/NFL/MLB/NBA research for the selected sport immediately, bypassing the published snapshot. This updates your current screen; **it does not publish changes to everyone** and requires no Vercel build.
+- **Publish Picks ↗** opens the authenticated GitHub Actions workflow at [Publish SportsLab Picks](https://github.com/psyche-s/SportsLab/actions/workflows/publish-board.yml). As the repository owner, choose **Run workflow**, choose **all / nhl / nfl / mlb / nba** and **auto** or **free**, and choose **Run workflow** again. The workflow calculates validated daily boards and updates the existing stable public release for each sport. There is no new website build, and no GitHub source-code commit.
 - **⋯ → Deploy website code** opens [Retry SportsLab Website Deployment](https://github.com/psyche-s/SportsLab/actions/workflows/redeploy-site.yml). Run this **only when source code/design changes** and **only when Vercel's daily deployment limit has reset**. It pushes a single empty commit to main to request a fresh production build. It still counts toward Vercel's free-plan limit; it does not bypass a billing restriction.
 
 ## Automatic publishing
 
 The GitHub Actions workflow also runs on a schedule at approximately **7 AM and 1 PM America/Toronto**. It checks Toronto local time to account for EST/EDT transitions. GitHub scheduled workflows are best effort and can be delayed.
 
-For each sport, the job builds today's ranked and scoring sections. It may use the site's primary research when available or the official/free NHL/MLB/NFL data sources. The published JSON includes timestamps, source descriptions, model notes and actual historical samples. If verified source data cannot be fetched, the workflow will **not** replace the old released data with a fabricated result. The site will reject yesterday's release when showing today's board.
+For each sport, the job builds today's ranked and scoring sections. It may use the site's primary research when available or the official/free NHL/MLB/NFL/NBA data sources. The published JSON includes timestamps, source descriptions, model notes and actual historical samples. If verified source data cannot be fetched, the workflow will **not** replace the old released data with a fabricated result. The site will reject yesterday's release when showing today's board.
 
 Persistent snapshots are stored as GitHub Release **notes**, under the fixed tags:
 
 - `sportslab-board-nhl`
 - `sportslab-board-nfl`
 - `sportslab-board-mlb`
+- `sportslab-board-nba`
 
 Each update edits release notes. The website's `/api/stat-board` fetches that public read-only JSON on ordinary visits and verifies sport/date/timestamp; `source=live` deliberately bypasses the publication when the user presses Refresh Stats. The reading endpoint has shared caching to limit GitHub API traffic.
 
