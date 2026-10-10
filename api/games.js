@@ -19,7 +19,7 @@ async function publicSchedule(sport,date){
   const r=await fetch('https://cdn.nba.com/static/json/staticData/scheduleLeagueV2_1.json',{headers:{Accept:'application/json'},signal:AbortSignal.timeout(9000)});
   if(!r.ok)throw Error('NBA schedule fallback HTTP '+r.status);
   const p=await r.json();
-  const dateParts=(value)=>{const m=String(value||'').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);return m?m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0'):null};
+  const dateParts=(value)=>{if(/^\d{4}-\d{2}-\d{2}/.test(String(value||'')))return String(value).slice(0,10);const m=String(value||'').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);return m?m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0'):null};
   return(p.leagueSchedule?.gameDates||[]).filter(x=>dateParts(x.gameDate)===date)
    .flatMap(x=>x.games||[]).filter(g=>String(g.gameId||'').startsWith('002'))
    .map(g=>{
