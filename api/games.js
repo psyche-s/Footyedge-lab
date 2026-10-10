@@ -13,6 +13,25 @@ async function publicSchedule(sport,date){
   return(p.dates||[]).flatMap(x=>x.games||[]).map(g=>{const team=x=>({name:x?.team?.name||'',short:x?.team?.teamName||x?.team?.name||'',abbreviation:x?.team?.abbreviation||'',logo:'',score:x?.score??null,record:null});const state=g.status?.abstractGameState||'Preview';return{id:String(g.gamePk),date:g.gameDate,status:g.status?.detailedState||state,state:state==='Final'?'post':state==='Live'?'in':'pre',detail:state,home:team(g.teams?.home),away:team(g.teams?.away),league:'MLB',venue:g.venue?.name||'',broadcast:'',summaryAvailable:false}});
  }
 
+ if(sport==='NBA'){
+  // NBA's public schedule is documented by the open-source swar/nba_api project.
+  // Use it only when the ESPN NBA scoreboard is unavailable.
+  const r=await fetch('https://cdn.nba.com/static/json/staticData/scheduleLeagueV2_1.json',{headers:{Accept:'application/json'},signal:AbortSignal.timeout(9000)});
+  if(!r.ok)throw Error('NBA schedule fallback HTTP '+r.status);
+  const p=await r.json();
+  const dateParts=(value)=>{const m=String(value||'').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);return m?m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0'):null};
+  return(p.leagueSchedule?.gameDates||[]).filter(x=>dateParts(x.gameDate)===date)
+   .flatMap(x=>x.games||[]).filter(g=>String(g.gameId||'').startsWith('002'))
+   .map(g=>{
+    const team=x=>({name:[x?.teamCity,x?.teamName].filter(Boolean).join(' '),short:x?.teamName||'',
+      abbreviation:x?.teamTricode||'',score:g.gameStatus===1?null:(x?.score??null),
+      logo:x?.teamId?'https://cdn.nba.com/logos/nba/'+encodeURIComponent(x.teamId)+'/primary/L/logo.svg':'',record:null});
+    const status=Number(g.gameStatus||1);
+    return{id:String(g.gameId),date:g.gameDateTimeUTC||null,status:status===3?'Final':status===2?'In progress':'Scheduled',
+      state:status===3?'post':status===2?'in':'pre',detail:g.gameStatusText||'',league:'NBA',
+      home:team(g.homeTeam),away:team(g.awayTeam),venue:g.arenaName||'',summaryAvailable:false};
+   });
+ }
  if(sport==='NFL'){
   const {readCsv}=require('../lib/free-nfl');
   const rows=await readCsv('https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv');
