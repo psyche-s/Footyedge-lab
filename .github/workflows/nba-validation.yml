@@ -1,0 +1,26 @@
+name: Verify Free NBA Research
+on:
+  push:
+    branches:
+      - feature/free-nba-api-pipeline-20261010
+  pull_request:
+    paths:
+      - 'lib/free-nba.js'
+      - 'lib/free-slate.js'
+      - 'lib/free-core.js'
+      - 'api/stat-board.js'
+      - 'tests/nba-free.test.js'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check lib/free-nba.js && node --check lib/free-slate.js && node --check api/stat-board.js
+      - run: node --test tests/nba-free.test.js
